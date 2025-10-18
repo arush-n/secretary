@@ -1,0 +1,81 @@
+def get_dashboard_data():
+    try:
+        # Mock dashboard data for demo purposes
+        dashboard_data = {
+            'net_worth': {
+                'current': 19550.98,
+                'change': 873.35,
+                'change_percent': 4.7
+            },
+            'budget': {
+                'income': {
+                    'current': 5410.00,
+                    'budget': 5265.75,
+                    'status': 'on_track'
+                },
+                'expenses': {
+                    'current': 3237.83,
+                    'budget': 3720.00,
+                    'status': 'under_budget'
+                },
+                'savings': {
+                    'current': 1300.00,
+                    'budget': 1324.93,
+                    'status': 'under_budget'
+                }
+            },
+            'assets_liabilities': {
+                'assets': {
+                    'total': 29960.98,
+                    'breakdown': {
+                        'checking': 6329.00,
+                        'savings': 5000.00,
+                        'investments': 18631.98
+                    }
+                },
+                'liabilities': {
+                    'total': 10410.00,
+                    'breakdown': {
+                        'credit_cards': 410.00,
+                        'loans': 10000.00
+                    }
+                }
+            },
+            'transactions': [
+                {
+                    '_id': '68f3e64a9683f20dd519e4ec',
+                    'amount': -25.50,
+                    'description': 'Coffee at Starbucks',
+                    'purchase_date': '2024-10-15',
+                    'status': 'executed'
+                },
+                {
+                    '_id': '68f3e64d9683f20dd519e4ee',
+                    'amount': -89.99,
+                    'description': 'Grocery shopping at Whole Foods',
+                    'purchase_date': '2024-10-14',
+                    'status': 'executed'
+                },
+                {
+                    '_id': '68f3e6529683f20dd519e4ef',
+                    'amount': -15.75,
+                    'description': 'Uber ride to downtown',
+                    'purchase_date': '2024-10-13',
+                    'status': 'executed'
+                },
+                {
+                    '_id': '68f3e6529683f20dd519e4f0',
+                    'amount': -1600.00,
+                    'description': 'Rent payment',
+                    'purchase_date': '2024-10-12',
+                    'status': 'executed'
+                },
+                {
+                    '_id': '68f3e6529683f20dd519e4f1',
+                    'amount': -95.00,
+                    'description': 'Verizon Mobile bill',
+                    'purchase_date': '2024-10-11',
+                    'status': 'executed'
+                }
+            ]
+        }

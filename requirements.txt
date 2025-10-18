@@ -1,0 +1,15 @@
+# secretary/requirements.txt
+fastapi
+pydantic
+langchain
+langchain-core
+langchain-google-genai
+langgraph
+python-dotenv
+requests
+pandas
+numpy
+colorama
+tabulate
+rich
+questionary
