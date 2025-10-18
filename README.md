@@ -1,36 +1,145 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Secretary - AI Financial Advisor Chat
 
-## Getting Started
+A single-page, all-black themed chat interface with specialized AI financial advisors powered by Google Gemini.
 
-First, run the development server:
+## 🎯 Features
+
+- **Single Page**: No routing, just one clean chat interface
+- **6 Financial Advisors**: Budget Coach, Savings Planner, Risk Watch, Subscriptions Sniper, Investment Advisor, Debt Destroyer
+- **All-Black Theme**: High contrast (#000 background, #fff text)
+- **Persistent Chat**: Messages and advisor selection saved to localStorage
+- **Real AI**: Powered by Google Gemini API (with mock fallback)
+
+## 🚀 Quick Start
+
+### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+### 2. Add API Key (Optional)
+
+Create `.env.local` in the root:
+
+```bash
+GEMINI_API_KEY=your_google_gemini_api_key_here
+```
+
+Get your key from: https://makersuite.google.com/app/apikey
+
+**Note**: Without an API key, the app will return mock responses but still work!
+
+### 3. Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📖 How It Works
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Chat Interface
+- Select an advisor from the dropdown
+- Type your financial question
+- Get personalized advice based on the advisor's expertise
+- Messages persist across page refreshes
 
-## Learn More
+### Advisors
+Each advisor has a unique persona and expertise:
 
-To learn more about Next.js, take a look at the following resources:
+- **Budget Coach**: Spending limits and money management
+- **Savings Planner**: Emergency funds and savings automation
+- **Risk Watch**: Financial risks and spending anomalies
+- **Subscriptions Sniper**: Recurring charge optimization
+- **Investment Advisor**: Investing and wealth building
+- **Debt Destroyer**: Debt elimination strategies
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Tech Stack
+- **Framework**: Next.js 14 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS + Custom Black Theme
+- **AI**: Google Gemini API
+- **State**: React hooks + localStorage
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 📁 Project Structure
 
-## Deploy on Vercel
+```
+src/
+├── app/
+│   ├── api/
+│   │   └── chat/route.ts      # Gemini API handler
+│   ├── page.tsx               # Main chat interface
+│   ├── layout.tsx             # Root layout
+│   └── globals.css            # Black theme styles
+├── data/
+│   └── advisors.json          # Advisor definitions
+└── components/
+    └── ui/                    # Reusable UI components
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🔑 Environment Variables
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Create `.env.local`:
+
+```bash
+# Required for AI responses (optional - uses mock if not set)
+GEMINI_API_KEY=your_key_here
+
+# Alternative variable name (also checked)
+NEXT_PUBLIC_GEMINI_API_KEY=your_key_here
+```
+
+## � Design
+
+- **All-black theme**: Pure black (#000) background
+- **High contrast**: White (#fff) text
+- **Minimal UI**: Clean sidebar, focused chat area
+- **Treasury.sh inspired**: Simple left navigation rail
+- **Rounded corners**: Subtle borders and smooth edges
+
+## 💬 Usage Tips
+
+1. **Start a conversation**: Type a financial question
+2. **Switch advisors**: Change advisor mid-conversation for different perspectives
+3. **About advisor**: Click "About" to see advisor description
+4. **Clear chat**: Use "Clear Chat" button in sidebar
+5. **Keyboard shortcuts**: Enter to send, Shift+Enter for new line
+
+## 🔒 Privacy & Security
+
+- **API key never exposed**: Handled server-side only
+- **No database**: Stateless architecture
+- **Local storage only**: Messages saved in browser only
+- **No tracking**: Zero analytics or data collection
+
+## 🚢 Deployment
+
+```bash
+npm run build
+npm start
+```
+
+Deploy to Vercel, Netlify, or any Node.js host. Set `GEMINI_API_KEY` in your hosting platform's environment variables.
+
+## 🧪 Mock Mode
+
+Without a Gemini API key, the app returns:
+> "I'm a mock advisor response. Set GEMINI_API_KEY in your .env.local file to enable real AI responses..."
+
+This lets you test the UI without an API key!
+
+## 📄 License
+
+MIT - Built for HackTX 2024
+
+## 🙏 Credits
+
+- Advisor personas inspired by: [ai-hedge-fund](https://github.com/virattt/ai-hedge-fund/)
+- UI inspiration: [treasury.sh](https://treasury.sh)
+- AI: [Google Gemini](https://ai.google.dev/)
+
+---
+
+**Simple, focused, ready to demo** 🚀
