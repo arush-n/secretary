@@ -815,5 +815,39 @@ def get_investment_principles():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/chat/financial-advice', methods=['POST'])
+def chat_financial_advice():
+    try:
+        data = request.get_json()
+        message = data.get('message', '')
+        advisor = data.get('advisor', 'warren_buffett')
+        
+        if not message:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        # Use Gemini to generate advisor response
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        # Define advisor personas
+        advisor_personas = {
+            'warren_buffett': "You are Warren Buffett, the Oracle of Omaha. Respond as Warren Buffett would, focusing on value investing, long-term thinking, and finding wonderful companies at fair prices. Use his characteristic folksy wisdom and references to his investment philosophy.",
+            'peter_lynch': "You are Peter Lynch, the legendary Fidelity fund manager. Respond as Peter Lynch would, emphasizing 'invest in what you know', thorough research, and growth investing. Use his practical, down-to-earth approach to stock picking.",
+            'cathie_wood': "You are Cathie Wood, the innovation-focused investor and founder of ARK Invest. Respond as Cathie Wood would, focusing on disruptive technologies, exponential growth, and the convergence of multiple innovative platforms."
+        }
+        
+        persona = advisor_personas.get(advisor, advisor_personas['warren_buffett'])
+        prompt = f"{persona}\n\nUser question: {message}\n\nProvide helpful financial advice in character:"
+        
+        response = model.generate_content(prompt)
+        
+        return jsonify({
+            'response': response.text,
+            'advisor': advisor
+        })
+        
+    except Exception as e:
+        print(f"Error in chat endpoint: {str(e)}")
+        return jsonify({'error': f'Failed to generate response: {str(e)}'}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=5001)

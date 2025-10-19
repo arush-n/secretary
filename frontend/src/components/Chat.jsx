@@ -48,21 +48,34 @@ function Chat() {
     setIsLoading(true)
 
     try {
-      // Mock AI response (replace with actual API call)
-      setTimeout(() => {
-        const responses = [
-          `As ${advisor.name}, I'd say that's an interesting question about your finances. Let me share some thoughts based on my investment philosophy...`,
-          `From my perspective as ${advisor.name}, here's how I would approach this situation...`,
-          `That's a great question! As ${advisor.name}, I believe the key principle here is...`,
-          `Let me give you some advice as ${advisor.name}. In my experience...`
-        ]
-        const randomResponse = responses[Math.floor(Math.random() * responses.length)]
-        
-        setMessages(prev => [...prev, { role: 'assistant', content: randomResponse }])
-        setIsLoading(false)
-      }, 1000 + Math.random() * 2000)
+      const response = await fetch('http://localhost:5001/chat/financial-advice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: input,
+          advisor: selectedAdvisor
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: data.response || 'Sorry, I couldn\'t generate a response.'
+      }])
+      setIsLoading(false)
     } catch (error) {
       console.error('Error sending message:', error)
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: `I apologize, but I'm currently unable to connect to my AI systems. However, as ${advisor.name}, I can offer you this general advice: undefined`
+      }])
       setIsLoading(false)
     }
   }
