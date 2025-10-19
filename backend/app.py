@@ -7,6 +7,11 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import numpy as np
 
+# Import new AI modules
+from stock_advisor import StockAdvisor
+from financial_advisory import FinancialAdvisory
+from agent import InvestmentAgent
+
 # Load environment variables
 load_dotenv()
 
@@ -15,6 +20,9 @@ CORS(app)
 
 # Configure Gemini API
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+
+# Initialize AI agents
+investment_agent = InvestmentAgent()
 
 @app.route('/get-dashboard-data', methods=['GET'])
 def get_dashboard_data():
@@ -684,6 +692,128 @@ def categorize_transaction(description):
         return 'income'
     else:
         return 'other'
+
+# Stock Advisor Endpoints
+@app.route('/api/stock-analysis/<stock_symbol>', methods=['POST'])
+def analyze_stock(stock_symbol):
+    try:
+        data = request.get_json() or {}
+        advisor_id = data.get('advisor_id', 'warren_buffett')
+        user_context = data.get('user_context', {})
+        
+        analysis = investment_agent.stock_advisor.analyze_stock(
+            stock_symbol=stock_symbol.upper(),
+            advisor_id=advisor_id,
+            user_context=user_context
+        )
+        
+        return jsonify(analysis)
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'stock_symbol': stock_symbol,
+            'advisor': advisor_id
+        }), 500
+
+@app.route('/api/comprehensive-stock-analysis/<stock_symbol>', methods=['POST'])
+def comprehensive_stock_analysis(stock_symbol):
+    try:
+        data = request.get_json() or {}
+        user_profile = data.get('user_profile', {})
+        
+        analysis = investment_agent.get_comprehensive_stock_analysis(
+            stock_symbol=stock_symbol.upper(),
+            user_profile=user_profile
+        )
+        
+        return jsonify(analysis)
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'stock_symbol': stock_symbol
+        }), 500
+
+@app.route('/api/market-outlook/<advisor_id>', methods=['GET'])
+def get_market_outlook(advisor_id):
+    try:
+        market_context = request.args.to_dict()
+        
+        outlook = investment_agent.stock_advisor.get_market_outlook(
+            advisor_id=advisor_id,
+            market_context=market_context
+        )
+        
+        return jsonify(outlook)
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'advisor': advisor_id
+        }), 500
+
+@app.route('/api/compare-stocks', methods=['POST'])
+def compare_stocks():
+    try:
+        data = request.get_json()
+        stock_symbols = [symbol.upper() for symbol in data.get('stock_symbols', [])]
+        advisor_id = data.get('advisor_id', 'warren_buffett')
+        user_profile = data.get('user_profile', {})
+        
+        if len(stock_symbols) < 2:
+            return jsonify({'error': 'at least 2 stock symbols required'}), 400
+        
+        comparison = investment_agent.compare_investment_options(
+            stock_symbols=stock_symbols,
+            user_profile=user_profile,
+            advisor_preference=advisor_id
+        )
+        
+        return jsonify(comparison)
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'stocks': stock_symbols if 'stock_symbols' in locals() else []
+        }), 500
+
+@app.route('/api/portfolio-analysis', methods=['POST'])
+def analyze_portfolio():
+    try:
+        data = request.get_json()
+        user_portfolio = data.get('portfolio', {})
+        user_profile = data.get('user_profile', {})
+        
+        analysis = investment_agent.get_portfolio_analysis(
+            user_portfolio=user_portfolio,
+            user_profile=user_profile
+        )
+        
+        return jsonify(analysis)
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e)
+        }), 500
+
+@app.route('/api/advisors', methods=['GET'])
+def get_advisors():
+    try:
+        advisors = investment_agent.stock_advisor.advisors
+        return jsonify({'advisors': advisors})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/investment-principles', methods=['GET'])
+def get_investment_principles():
+    try:
+        principles = investment_agent.financial_advisory.get_investment_principles()
+        return jsonify({'principles': principles})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
