@@ -84,8 +84,9 @@ CITY_TO_IATA = {
     'taipei': 'TPE',
 }
 
-# ========== Categories and Tags Management ==========
-CATEGORIES = [
+# ========== Categories and Tags Management (with persistence) ==========
+# Default category names (used to seed on first run)
+DEFAULT_CATEGORY_NAMES = [
     'Food & Drink',
     'Shopping',
     'Transport',
@@ -113,13 +114,150 @@ TAGS = [
 # In-memory storage for transaction updates (in production, use a database)
 TRANSACTION_UPDATES = {}
 
+# File persistence for categories metadata (name + color)
+DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+CATEGORIES_FILE = os.path.join(DATA_DIR, 'categories.json')
+
+_CATEGORY_COLOR_PALETTE = [
+    'bg-red-500', 'bg-purple-500', 'bg-blue-500', 'bg-yellow-500',
+    'bg-pink-500', 'bg-green-500', 'bg-teal-500', 'bg-indigo-500', 'bg-gray-500'
+]
+
+def _hash_string_to_index(s, mod):
+    h = 2166136261
+    for ch in (s or ''):
+        h ^= ord(ch)
+        h = (h * 16777619) & 0xffffffff
+    return abs(h) % mod
+
+def _color_for_category(name):
+    # Prefer well-known mapping for common categories
+    mapping = {
+        'Food & Drink': 'bg-red-500',
+        'Shopping': 'bg-purple-500',
+        'Transport': 'bg-blue-500',
+        'Bills & Utilities': 'bg-yellow-500',
+        'Entertainment': 'bg-pink-500',
+        'Groceries': 'bg-green-500',
+        'Healthcare': 'bg-teal-500',
+        'Travel': 'bg-indigo-500',
+        'Other': 'bg-gray-500'
+    }
+    if not name:
+        return mapping['Other']
+    if name in mapping:
+        return mapping[name]
+    idx = _hash_string_to_index(name, len(_CATEGORY_COLOR_PALETTE))
+    return _CATEGORY_COLOR_PALETTE[idx]
+
+def load_categories():
+    """Load categories metadata from disk. Returns list of {name,color}."""
+    try:
+        if not os.path.isdir(DATA_DIR):
+            os.makedirs(DATA_DIR, exist_ok=True)
+        if os.path.exists(CATEGORIES_FILE):
+            with open(CATEGORIES_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # validate structure
+                if isinstance(data, list):
+                    cleaned = []
+                    for item in data:
+                        if isinstance(item, dict) and 'name' in item:
+                            cleaned.append({
+                                'name': str(item['name']),
+                                'color': item.get('color') or _color_for_category(item.get('name'))
+                            })
+                    if cleaned:
+                        return cleaned
+        # Fallback to defaults
+        return [{ 'name': n, 'color': _color_for_category(n) } for n in DEFAULT_CATEGORY_NAMES]
+    except Exception as e:
+        logger.error(f'Failed to load categories file: {e}')
+        return [{ 'name': n, 'color': _color_for_category(n) } for n in DEFAULT_CATEGORY_NAMES]
+
+def save_categories(cat_list):
+    """Persist categories metadata to disk. cat_list should be list of {name,color} dicts or names."""
+    try:
+        if not os.path.isdir(DATA_DIR):
+            os.makedirs(DATA_DIR, exist_ok=True)
+        # Normalize to list of dicts
+        normalized = []
+        for item in cat_list:
+            if isinstance(item, str):
+                normalized.append({'name': item, 'color': _color_for_category(item)})
+            elif isinstance(item, dict) and 'name' in item:
+                normalized.append({'name': str(item['name']), 'color': item.get('color') or _color_for_category(item.get('name'))})
+        with open(CATEGORIES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(normalized, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f'Failed to save categories file: {e}')
+        return False
+
+# Load at startup
+CATEGORIES_META = load_categories()
+CATEGORIES = [c['name'] for c in CATEGORIES_META]
+
 @app.route('/get-categories', methods=['GET'])
 def get_categories():
-    return jsonify(CATEGORIES)
+    # Return metadata (name + color) for each category so frontend can render consistently
+    try:
+        return jsonify(CATEGORIES_META)
+    except Exception as e:
+        logger.error(f'Error returning categories: {e}')
+        return jsonify([{'name': n, 'color': _color_for_category(n)} for n in DEFAULT_CATEGORY_NAMES])
+
+
+@app.route('/set-categories', methods=['POST'])
+def set_categories():
+    try:
+        data = request.get_json() or {}
+        new_categories = data.get('categories')
+        if not isinstance(new_categories, list):
+            return jsonify({'error': 'categories must be a list'}), 400
+
+        # Accept list of names or list of {name,color} objects
+        normalized = []
+        for item in new_categories:
+            if isinstance(item, str):
+                normalized.append({'name': item, 'color': _color_for_category(item)})
+            elif isinstance(item, dict) and 'name' in item:
+                normalized.append({'name': str(item['name']), 'color': item.get('color') or _color_for_category(item.get('name'))})
+
+        # Persist to disk and update in-memory
+        saved = save_categories(normalized)
+        if not saved:
+            return jsonify({'error': 'Failed to save categories'}), 500
+
+        global CATEGORIES_META, CATEGORIES
+        CATEGORIES_META = normalized
+        CATEGORIES = [c['name'] for c in CATEGORIES_META]
+        logger.info(f'Categories updated: {CATEGORIES}')
+        return jsonify({'success': True, 'categories': CATEGORIES_META})
+    except Exception as e:
+        logger.error(f'Error setting categories: {e}')
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/get-tags', methods=['GET'])
 def get_tags():
     return jsonify(TAGS)
+
+
+@app.route('/set-tags', methods=['POST'])
+def set_tags():
+    try:
+        data = request.get_json() or {}
+        new_tags = data.get('tags')
+        if not isinstance(new_tags, list):
+            return jsonify({'error': 'tags must be a list'}), 400
+
+        global TAGS
+        TAGS = [str(t) for t in new_tags]
+        logger.info(f'Tags updated: {TAGS}')
+        return jsonify({'success': True, 'tags': TAGS})
+    except Exception as e:
+        logger.error(f'Error setting tags: {e}')
+        return jsonify({'error': str(e)}), 500
 
 # ========== Vacation & Flight Search Endpoints ==========
 def _cheapest_flight_response(arrival: str, outbound_date: str, return_date: str):
@@ -366,6 +504,14 @@ def update_transaction():
         if not transaction_id:
             return jsonify({'error': 'Missing transaction_id'}), 400
         
+        # If category is provided, also attach category_color using known metadata
+        if updates and 'category' in updates:
+            cat_name = updates.get('category')
+            # Try to find color from persisted categories
+            found = next((c for c in (CATEGORIES_META or []) if c.get('name') == cat_name), None)
+            updates = dict(updates)
+            updates['category_color'] = found.get('color') if found else _color_for_category(cat_name)
+
         # Store updates in memory (in production, update database)
         TRANSACTION_UPDATES[transaction_id] = {
             **TRANSACTION_UPDATES.get(transaction_id, {}),

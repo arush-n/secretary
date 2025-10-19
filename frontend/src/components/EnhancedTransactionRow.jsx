@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import TransactionSplitModal from './TransactionSplitModal';
 import { InlineNameEditor, InlineDateEditor, InlineNoteEditor } from './InlinedEditor';
+import { getCategoryColor, getCategoryIcon } from '../utils/categoryColors'
 
 const API_BASE = 'http://localhost:5001';
 
@@ -192,35 +193,7 @@ const EnhancedTransactionRow = ({
     setShowSplitModal(false);
   };
 
-  const getCategoryIcon = (category) => {
-    const icons = {
-      'Food & Drink': '🍔',
-      'Shopping': '🛍️',
-      'Transport': '🚗',
-      'Bills & Utilities': '💡',
-      'Entertainment': '🎬',
-      'Groceries': '🛒',
-      'Healthcare': '⚕️',
-      'Travel': '✈️',
-      'Other': '📦'
-    }
-    return icons[category] || '📦'
-  }
-
-  const getCategoryColor = (category) => {
-    const colors = {
-      'Food & Drink': 'bg-red-500',
-      'Shopping': 'bg-purple-500',
-      'Transport': 'bg-blue-500',
-      'Bills & Utilities': 'bg-yellow-500',
-      'Entertainment': 'bg-pink-500',
-      'Groceries': 'bg-green-500',
-      'Healthcare': 'bg-teal-500',
-      'Travel': 'bg-indigo-500',
-      'Other': 'bg-gray-500'
-    }
-    return colors[category] || 'bg-gray-500'
-  }
+  // Use deterministic category color/icon helpers from utils/categoryColors
 
   const quickActions = [
     {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import EnhancedTransactionRow from './EnhancedTransactionRow'
+import { getCategoryColor, getCategoryIcon } from '../utils/categoryColors'
 
 const API_BASE = 'http://localhost:5001';
 
@@ -96,35 +97,8 @@ function Transactions({ categories, tags }) {
     return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   }
 
-  const getCategoryColor = (category) => {
-    const colors = {
-      'Food & Drink': 'bg-red-500',
-      'Shopping': 'bg-purple-500',
-      'Transport': 'bg-blue-500',
-      'Bills & Utilities': 'bg-yellow-500',
-      'Entertainment': 'bg-pink-500',
-      'Groceries': 'bg-green-500',
-      'Healthcare': 'bg-teal-500',
-      'Travel': 'bg-indigo-500',
-      'Other': 'bg-gray-500'
-    }
-    return colors[category] || 'bg-gray-500'
-  }
-
-  const getCategoryIcon = (category) => {
-    const icons = {
-      'Food & Drink': '🍔',
-      'Shopping': '🛍️',
-      'Transport': '🚗',
-      'Bills & Utilities': '💡',
-      'Entertainment': '🎬',
-      'Groceries': '🛒',
-      'Healthcare': '⚕️',
-      'Travel': '✈️',
-      'Other': '📦'
-    }
-    return icons[category] || '📦'
-  }
+  // Use deterministic color/icon mapping for categories
+  // getCategoryColor and getCategoryIcon are imported from utils/categoryColors
 
   const getFilteredTransactions = () => {
     return transactions.filter(t => {

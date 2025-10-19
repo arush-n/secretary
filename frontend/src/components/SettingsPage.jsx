@@ -1,9 +1,4 @@
-import React,
-{
-  useState,
-  useEffect
-}
-from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Settings,
   Link,
@@ -38,14 +33,20 @@ const SettingsPage = ({
   const [plaidLinked, setPlaidLinked] = useState(false);
 
   // Initialize state from props
+  const _initialized = useRef(false);
+
   useEffect(() => {
-    const categoriesWithIds = initialCategories.map((name, idx) => ({
+    // Only initialize once to avoid re-running when parent passes new array
+    // references on every render which can cause an update loop.
+    if (_initialized.current) return;
+
+    const categoriesWithIds = (initialCategories || []).map((name, idx) => ({
       id: idx,
       name: name,
       color: getRandomColor()
     }));
 
-    const tagsWithIds = initialTags.map((name, idx) => ({
+    const tagsWithIds = (initialTags || []).map((name, idx) => ({
       id: idx + 1000,
       name: name,
       color: getRandomColor()
@@ -54,7 +55,11 @@ const SettingsPage = ({
     setCategories(categoriesWithIds);
     setTags(tagsWithIds);
     setPreferences(initialPreferences || []);
-  }, [initialCategories, initialTags, initialPreferences]);
+
+    _initialized.current = true;
+    // Intentionally run only once on mount / first props read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Category Management
   const addCategory = () => {
@@ -66,7 +71,8 @@ const SettingsPage = ({
     }];
     setCategories(updated);
     if (onCategoriesUpdate) {
-      onCategoriesUpdate(updated.map(c => c.name));
+      // pass metadata objects (name + color) so backend can persist color
+      onCategoriesUpdate(updated.map(c => ({ name: c.name, color: c.color })));
     }
     setNewItemName('');
   };
@@ -80,7 +86,7 @@ const SettingsPage = ({
     );
     setCategories(updated);
     if (onCategoriesUpdate) {
-      onCategoriesUpdate(updated.map(c => c.name));
+      onCategoriesUpdate(updated.map(c => ({ name: c.name, color: c.color })));
     }
     setEditingId(null);
     setEditValue('');
@@ -90,7 +96,7 @@ const SettingsPage = ({
     const updated = categories.filter(c => c.id !== id);
     setCategories(updated);
     if (onCategoriesUpdate) {
-      onCategoriesUpdate(updated.map(c => c.name));
+      onCategoriesUpdate(updated.map(c => ({ name: c.name, color: c.color })));
     }
   };
 
