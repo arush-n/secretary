@@ -193,7 +193,7 @@ const SettingsPage = ({
         <div className="mb-8">
           <h1 className="text-3xl font-bold flex items-center gap-3">
             <Settings className="w-8 h-8 text-blue-400" />
-            Settings
+            settings
           </h1>
           <p className="text-gray-400 mt-2">manage your connections, categories, tags, and preferences</p>
         </div>
@@ -249,7 +249,7 @@ const SettingsPage = ({
         {/* Connections Tab */}
         {activeTab === 'connections' && (
           <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h2 className="text-xl font-semibold mb-4">Bank Connections</h2>
+            <h2 className="text-xl font-semibold mb-4">bank connections</h2>
             <p className="text-gray-400 mb-6">
               connect your financial institutions through plaid to automatically sync transactions in real-time.
             </p>
@@ -299,7 +299,7 @@ const SettingsPage = ({
             )}
 
             <div className="mt-8 p-4 bg-blue-900/20 border border-blue-800 rounded-lg">
-              <h4 className="font-semibold text-blue-400 mb-2">About Plaid Integration</h4>
+              <h4 className="font-semibold text-blue-400 mb-2">about plaid integration</h4>
               <p className="text-sm text-gray-300">
                 plaid securely connects to over 10,000 financial institutions. your credentials are never stored, 
                 and all data is encrypted. you can disconnect at any time.
