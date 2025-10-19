@@ -1,110 +1,150 @@
-# Secretary - Personal Finance Dashboard
+<div align="center">
+  <img src="frontend/src/assets/banner.png" alt="Secretary Banner" width="100%">
+  
+  # Secretary
+  
+  ### AI-Powered Personal Finance Dashboard
+  
+  A comprehensive financial management platform featuring real-time transaction tracking, AI-driven insights, budget planning, and intelligent financial advisory powered by Google Gemini AI and Capital One's Nessie API.
+  
+  [![React](https://img.shields.io/badge/React-18-blue?logo=react)](https://reactjs.org/)
+  [![Flask](https://img.shields.io/badge/Flask-2.3-green?logo=flask)](https://flask.palletsprojects.com/)
+  [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.0-38bdf8?logo=tailwind-css)](https://tailwindcss.com/)
+  [![Gemini AI](https://img.shields.io/badge/Gemini-AI-orange?logo=google)](https://ai.google.dev/)
+  
+</div>
 
-A hackathon project that creates a personal finance dashboard using Capital One's Nessie API for mock bank data and Google Gemini API for AI-powered insights and transaction categorization.
+---
 
-## Project Structure
+## 🚀 Features
+
+- **📊 Real-Time Dashboard** - Complete overview of net worth, budgets, assets, and liabilities
+- **🤖 AI Financial Advisor** - Personalized insights and recommendations from Google Gemini
+- **💳 Transaction Management** - Automatic categorization and tracking with AI-powered analysis
+- **📅 Budget Calendar** - Visual budget planning and recurring expense tracking
+- **💰 Investment Tracking** - Monitor portfolio performance and asset allocation
+- **🏖️ Vacation Planner** - Budget and plan trips with financial forecasting
+- **⚙️ Smart Settings** - Customizable categories, tags, and preferences with sync
+
+---
+
+## 📁 Project Structure
 
 ```
-secretary-hackathon/
+hacktx-secretary/
 ├── backend/
-│   ├── app.py
-│   ├── requirements.txt
-│   └── .env (create this file with your API keys)
+│   ├── app.py                 # Flask API server
+│   ├── stock_advisor.py       # Stock market integration
+│   ├── requirements.txt       # Python dependencies
+│   └── .env                   # API keys (create this)
+│
 └── frontend/
     ├── src/
-    │   ├── components/
-    │   │   ├── Header.jsx
-    │   │   ├── Summary.jsx
-    │   │   └── TransactionList.jsx
-    │   ├── App.jsx
-    │   ├── index.css
-    │   └── main.jsx
-    ├── index.html
-    ├── package.json
-    ├── tailwind.config.js
-    ├── postcss.config.js
-    └── vite.config.js
+    │   ├── components/        # React components
+    │   │   ├── DashboardView.jsx
+    │   │   ├── Transactions.jsx
+    │   │   ├── BudgetCalendar.jsx
+    │   │   ├── Investments.jsx
+    │   │   ├── Chat.jsx
+    │   │   ├── SettingsPage.jsx
+    │   │   └── ...
+    │   ├── assets/            # Images and static files
+    │   ├── App.jsx            # Main app component
+    │   └── index.css          # Global styles
+    │
+    ├── package.json           # npm dependencies
+    ├── tailwind.config.js     # Tailwind configuration
+    └── vite.config.js         # Vite build config
 ```
 
-## Setup Instructions
+---
+
+## 🛠️ Setup & Installation
+
+### Prerequisites
+
+- **Node.js** (v16+)
+- **Python** (v3.8+)
+- **npm** or **yarn**
 
 ### Backend Setup
 
-1. Navigate to the backend directory:
-   ```bash
-   cd secretary-hackathon/backend
-   ```
+```bash
+# Navigate to backend directory
+cd backend
 
-2. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+# Install dependencies
+pip install -r requirements.txt
 
-4. Create a `.env` file with your API keys:
-   ```
-   NESSIE_API_KEY=your_nessie_api_key_here
-   GEMINI_API_KEY=your_gemini_api_key_here
-   ```
+# Create .env file with API keys
+echo "GEMINI_API_KEY=your_gemini_api_key_here" > .env
+echo "NESSIE_API_KEY=your_nessie_api_key_here" >> .env
 
-5. Run the Flask server:
-   ```bash
-   python app.py
-   ```
+# Run Flask server
+python app.py
+```
 
-The backend will run on `http://localhost:5001`
+**Backend runs on:** `http://localhost:5001`
 
 ### Frontend Setup
 
-1. Navigate to the frontend directory:
-   ```bash
-   cd secretary-hackathon/frontend
-   ```
+```bash
+# Navigate to frontend directory
+cd frontend
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+# Install dependencies
+npm install
 
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
+# Start development server
+npm run dev
+```
 
-The frontend will run on `http://localhost:3000`
+**Frontend runs on:** `http://localhost:3000` (or next available port)
 
-## API Keys Required
+---
 
-- **Capital One Nessie API**: Get your API key from [Capital One Developer Portal](https://developer.capitalone.com/)
-- **Google Gemini API**: Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+## 🔑 API Keys
 
-## Features
+| Service | Link | Purpose |
+|---------|------|---------|
+| **Google Gemini API** | [Get API Key](https://makersuite.google.com/app/apikey) | AI-powered transaction categorization and financial advice |
+| **Capital One Nessie API** | [Developer Portal](https://developer.capitalone.com/) | Mock banking data for transactions and accounts |
 
-- **Comprehensive Financial Dashboard**: Complete overview of net worth, budgets, assets, and liabilities
-- **Real-time Transaction Data**: Fetches mock bank transactions from Capital One's Nessie API
-- **AI-Powered Analysis**: Uses Google Gemini to categorize transactions and provide financial insights
-- **Budget Tracking**: Monitor income, expenses, and savings against monthly budgets
-- **Assets & Liabilities Breakdown**: Visual representation of financial portfolio
-- **Net Worth Tracking**: Track net worth with trend visualization
-- **Modern UI**: Clean, dark-themed interface inspired by treasury.sh
-- **Responsive Design**: Works on desktop and mobile devices
+Add your API keys to `backend/.env`:
 
-## Demo Customer ID
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+NESSIE_API_KEY=your_nessie_api_key_here
+```
 
-The app uses a hardcoded customer ID (`68f3e5a29683f20dd519e4ea`) for demonstration purposes. In a production environment, this would be dynamically determined based on user authentication.
+---
 
-## Tech Stack
+## 💻 Tech Stack
 
-- **Frontend**: React + Vite + Tailwind CSS
-- **Backend**: Python + Flask
-- **APIs**: Capital One Nessie API + Google Gemini API
-- **Styling**: Tailwind CSS with dark theme
+| Layer | Technologies |
+|-------|-------------|
+| **Frontend** | React, Vite, Tailwind CSS, Lucide Icons |
+| **Backend** | Python, Flask, Flask-CORS |
+| **AI/ML** | Google Gemini 2.5 Flash |
+| **APIs** | Capital One Nessie API |
+| **State Management** | React Hooks, localStorage |
+| **Styling** | Tailwind CSS, Custom Dark Theme |
 
-## Hackathon Notes
+---
 
-This is a rapid prototype built for a 24-hour Capital One hackathon. The focus is on demonstrating the core concept with a compelling end-to-end user flow rather than production-ready code.
+## 📝 License
+
+Built for HackTX 2025. All rights reserved.
+
+---
+
+<div align="center">
+  <p>Made with ❤️ by the Secretary Team</p>
+  <p>
+    <a href="https://github.com/arush-n/secretary">⭐ Star us on GitHub</a>
+  </p>
+</div>
