@@ -7,7 +7,7 @@ function Investments() {
   const [analysis, setAnalysis] = useState(null)
   const [loading, setLoading] = useState(false)
   const [advisors, setAdvisors] = useState({})
-  const [activeTab, setActiveTab] = useState('analysis') // analysis, comparison, portfolio
+  const [activeTab, setActiveTab] = useState('analysis') // analysis, comparison
   const [comparisonStocks, setComparisonStocks] = useState(['', ''])
   const [comparisonResult, setComparisonResult] = useState(null)
 
@@ -87,18 +87,7 @@ function Investments() {
     setLoading(false)
   }
 
-  const renderAnalysis = () => {
-    if (!analysis) return null
-
-    if (analysis.error) {
-      return (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 mb-6">
-          <h3 className="text-lg font-light text-red-400 mb-2">analysis unavailable</h3>
-          <p className="text-sm text-red-300">{analysis.error}</p>
-        </div>
-      )
-    }
-
+  const renderStandardAnalysis = (analysisData) => {
     const advisor = advisors[selectedAdvisor] || {}
     
     return (
@@ -117,17 +106,17 @@ function Investments() {
         </div>
 
         {/* Bullish Case */}
-        {analysis.bullish_case && (
+        {analysisData.bullish_case && (
           <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-6">
             <h3 className="text-lg font-light text-green-400 mb-3 flex items-center gap-2">
               📈 bullish case
               <span className="text-xs px-2 py-1 bg-green-500/20 rounded-full">
-                {analysis.bullish_case.confidence_level}
+                {analysisData.bullish_case.confidence_level}
               </span>
             </h3>
-            <p className="text-sm text-green-200 mb-4">{analysis.bullish_case.summary}</p>
+            <p className="text-sm text-green-200 mb-4">{analysisData.bullish_case.summary}</p>
             <div className="space-y-2">
-              {analysis.bullish_case.key_points?.map((point, index) => (
+              {analysisData.bullish_case.key_points?.map((point, index) => (
                 <div key={index} className="flex items-start gap-2">
                   <span className="text-green-400 mt-1">•</span>
                   <span className="text-sm text-green-300">{point}</span>
@@ -138,17 +127,17 @@ function Investments() {
         )}
 
         {/* Bearish Case */}
-        {analysis.bearish_case && (
+        {analysisData.bearish_case && (
           <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6">
             <h3 className="text-lg font-light text-red-400 mb-3 flex items-center gap-2">
               📉 bearish case
               <span className="text-xs px-2 py-1 bg-red-500/20 rounded-full">
-                {analysis.bearish_case.confidence_level}
+                {analysisData.bearish_case.confidence_level}
               </span>
             </h3>
-            <p className="text-sm text-red-200 mb-4">{analysis.bearish_case.summary}</p>
+            <p className="text-sm text-red-200 mb-4">{analysisData.bearish_case.summary}</p>
             <div className="space-y-2">
-              {analysis.bearish_case.key_points?.map((point, index) => (
+              {analysisData.bearish_case.key_points?.map((point, index) => (
                 <div key={index} className="flex items-start gap-2">
                   <span className="text-red-400 mt-1">•</span>
                   <span className="text-sm text-red-300">{point}</span>
@@ -159,51 +148,51 @@ function Investments() {
         )}
 
         {/* Recommendation */}
-        {analysis.recommendation && (
+        {analysisData.recommendation && (
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-6">
             <h3 className="text-lg font-light text-blue-400 mb-3 flex items-center gap-2">
               💡 recommendation
               <span className={`text-xs px-2 py-1 rounded-full capitalize ${
-                analysis.recommendation.action === 'buy' 
+                analysisData.recommendation.action === 'buy' 
                   ? 'bg-green-500/20 text-green-400'
-                  : analysis.recommendation.action === 'sell'
+                  : analysisData.recommendation.action === 'sell'
                   ? 'bg-red-500/20 text-red-400'
                   : 'bg-yellow-500/20 text-yellow-400'
               }`}>
-                {analysis.recommendation.action}
+                {analysisData.recommendation.action}
               </span>
             </h3>
-            <p className="text-sm text-blue-200 mb-3">{analysis.recommendation.reasoning}</p>
+            <p className="text-sm text-blue-200 mb-3">{analysisData.recommendation.reasoning}</p>
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div>
                 <span className="text-gray-400">outlook:</span>
-                <span className="ml-2 text-white capitalize">{analysis.recommendation.price_target_outlook}</span>
+                <span className="ml-2 text-white capitalize">{analysisData.recommendation.price_target_outlook}</span>
               </div>
               <div>
                 <span className="text-gray-400">horizon:</span>
-                <span className="ml-2 text-white capitalize">{analysis.recommendation.time_horizon}</span>
+                <span className="ml-2 text-white capitalize">{analysisData.recommendation.time_horizon}</span>
               </div>
             </div>
           </div>
         )}
 
         {/* Risk Assessment */}
-        {analysis.risk_assessment && (
+        {analysisData.risk_assessment && (
           <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-6">
             <h3 className="text-lg font-light text-orange-400 mb-3 flex items-center gap-2">
               ⚠️ risk assessment
               <span className={`text-xs px-2 py-1 rounded-full capitalize ${
-                analysis.risk_assessment.overall_risk === 'high'
+                analysisData.risk_assessment.overall_risk === 'high'
                   ? 'bg-red-500/20 text-red-400'
-                  : analysis.risk_assessment.overall_risk === 'low'
+                  : analysisData.risk_assessment.overall_risk === 'low'
                   ? 'bg-green-500/20 text-green-400'
                   : 'bg-yellow-500/20 text-yellow-400'
               }`}>
-                {analysis.risk_assessment.overall_risk} risk
+                {analysisData.risk_assessment.overall_risk} risk
               </span>
             </h3>
             <div className="space-y-2">
-              {analysis.risk_assessment.key_risks?.map((risk, index) => (
+              {analysisData.risk_assessment.key_risks?.map((risk, index) => (
                 <div key={index} className="flex items-start gap-2">
                   <span className="text-orange-400 mt-1">•</span>
                   <span className="text-sm text-orange-300">{risk}</span>
@@ -214,6 +203,41 @@ function Investments() {
         )}
       </div>
     )
+  }
+
+  const renderAnalysis = () => {
+    if (!analysis) return null
+
+    if (analysis.error) {
+      return (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 mb-6">
+          <h3 className="text-lg font-light text-red-400 mb-2">analysis unavailable</h3>
+          <p className="text-sm text-red-300">{analysis.error}</p>
+          {analysis.error.includes('quota') && (
+            <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+              <p className="text-sm text-yellow-300">
+                💡 the ai service has reached its quota limit. please try again later or check your api key configuration.
+              </p>
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    // Show fallback mode message if available
+    if (analysis.ai_status === 'fallback_mode') {
+      return (
+        <div className="space-y-6">
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-6 mb-6">
+            <h3 className="text-lg font-light text-yellow-400 mb-2">📊 fallback analysis</h3>
+            <p className="text-sm text-yellow-300">{analysis.message}</p>
+          </div>
+          {renderStandardAnalysis(analysis)}
+        </div>
+      )
+    }
+
+    return renderStandardAnalysis(analysis)
   }
 
   const renderComparison = () => {
@@ -299,8 +323,7 @@ function Investments() {
         <div className="flex gap-1 mb-8 bg-white/[0.02] p-1 rounded-lg border border-white/10">
           {[
             { id: 'analysis', label: 'stock analysis', icon: '📊' },
-            { id: 'comparison', label: 'compare stocks', icon: '⚖️' },
-            { id: 'portfolio', label: 'portfolio', icon: '📈' }
+            { id: 'comparison', label: 'compare stocks', icon: '⚖️' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -412,15 +435,7 @@ function Investments() {
           </div>
         )}
 
-        {activeTab === 'portfolio' && (
-          <div className="text-center text-gray-500 mt-20">
-            <svg className="w-16 h-16 mx-auto mb-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-            <p className="text-lg font-medium">portfolio analysis coming soon</p>
-            <p className="text-sm mt-2 text-gray-600">comprehensive portfolio review and recommendations</p>
-          </div>
-        )}
+
 
       </div>
     </div>

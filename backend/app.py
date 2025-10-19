@@ -370,7 +370,7 @@ def get_budget_advice():
         leeway = data.get('leeway', 0)
         context = data.get('context', {})
         
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         prompt = f"""You have ${leeway:.2f} remaining in your monthly budget. 
 
