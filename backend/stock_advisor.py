@@ -196,6 +196,8 @@ Return analysis as Cathie Wood would - innovation-focused, high-conviction, tran
             
             # Clean and parse response
             response_text = response.text.strip()
+            print(f"Raw AI response for {stock_symbol}: {response_text[:200]}...")  # Debug logging
+            
             if response_text.startswith('```json'):
                 response_text = response_text[7:]
             if response_text.startswith('```'):
@@ -209,12 +211,15 @@ Return analysis as Cathie Wood would - innovation-focused, high-conviction, tran
             # Add metadata
             analysis['timestamp'] = datetime.now().isoformat()
             analysis['advisor_info'] = advisor
+            analysis['ai_status'] = 'success'
             
             return analysis
             
         except json.JSONDecodeError as e:
+            print(f"JSON parse error for {stock_symbol}: {e}")  # Debug logging
             return self._get_fallback_analysis(advisor, stock_symbol, 'json_parse_error')
         except Exception as e:
+            print(f"API error for {stock_symbol}: {e}")  # Debug logging
             error_str = str(e).lower()
             if 'quota' in error_str or 'rate limit' in error_str or '429' in error_str:
                 return self._get_fallback_analysis(advisor, stock_symbol, 'quota_exceeded')
