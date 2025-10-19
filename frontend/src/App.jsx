@@ -2,9 +2,11 @@ import React, { useState } from 'react'
 import Sidebar from './components/Sidebar'
 import DashboardView from './components/DashboardView'
 import Chat from './components/Chat'
-import Budgeting from './components/Budgeting'
+import BudgetCalendar from './components/BudgetCalendar'
 import Investments from './components/Investments'
 import Vacations from './components/Vacations'
+import RecurringExpenses from './components/RecurringExpenses'
+import Transactions from './components/Transactions'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -16,23 +18,27 @@ function App() {
       case 'chat':
         return <Chat />
       case 'budgeting':
-        return <Budgeting />
+        return <BudgetCalendar />
       case 'investments':
         return <Investments />
       case 'vacations':
         return <Vacations />
+      case 'recurring':
+        return <RecurringExpenses />
+      case 'transactions':
+        return <Transactions />
       default:
         return <DashboardView />
     }
   }
 
   return (
-    <div className="min-h-screen bg-black flex">
-      {/* Sidebar */}
+    <div className="h-screen bg-black flex overflow-hidden">
+      {/* Sidebar - Fixed */}
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       
-      {/* Main Content */}
-      <div className="flex-1">
+      {/* Main Content - Scrollable */}
+      <div className="flex-1 overflow-hidden">
         {renderContent()}
       </div>
     </div>

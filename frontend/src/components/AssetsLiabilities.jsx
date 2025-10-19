@@ -16,7 +16,7 @@ function AssetsLiabilities({ assetsLiabilities }) {
   const liabilitiesPercentage = total > 0 ? (liabilitiesTotal / total) * 100 : 0
 
   return (
-    <div className="bg-black border border-gray-800 rounded-lg p-6">
+    <div className="bg-black rounded-lg p-6 border border-white/10">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-lg font-medium text-white">ASSETS</h2>
         <h2 className="text-lg font-medium text-white">LIABILITIES</h2>
