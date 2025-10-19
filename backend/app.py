@@ -1794,13 +1794,17 @@ def chat_financial_advice():
         data = request.get_json()
         message = data.get('message', '')
         advisor = data.get('advisor', 'warren_buffett')
-        
+
         if not message:
             return jsonify({'error': 'Message is required'}), 400
-        
-        # Use Gemini to generate advisor response
-        model = genai.GenerativeModel('gemini-2.5-flash')
-    except:
+
+        # Try to initialize Gemini model; if it fails, fall back to a safe offline path
+        model = None
+        try:
+            model = genai.GenerativeModel('gemini-2.5-flash')
+        except Exception as e:
+            logger.warning(f'Gemini model initialization failed: {e}')
+
         # Define comprehensive advisor personas
         advisor_personas = {
             'warren_buffett': """You are Warren Buffett, the legendary value investor and CEO of Berkshire Hathaway.
@@ -1916,7 +1920,7 @@ Remember: Focus on the science and data behind innovations, and help investors u
         }
         
         persona = advisor_personas.get(advisor, advisor_personas['warren_buffett'])
-        
+
         prompt = f"""{persona}
 
 USER QUESTION:
@@ -1933,16 +1937,35 @@ RESPONSE GUIDELINES:
 
 Provide your response now:
 """
-    try:
-        response = model.generate_content(prompt)
-        
+
+        # If model is available, try to generate a response. If generation fails or model
+        # is unavailable, return a safe fallback response instead of raising a 500.
+        if model is not None:
+            try:
+                response = model.generate_content(prompt)
+                return jsonify({
+                    'response': response.text,
+                    'advisor': advisor
+                })
+            except Exception as e:
+                logger.error(f"Gemini generation failed: {e}")
+
+        # Fallback: generate a short, deterministic advisor-style reply so the frontend
+        # receives a usable response even when Gemini is down.
+        fallback_reply = (
+            f"(Fallback - Gemini unavailable) {advisor.replace('_', ' ').title()} response: "
+            f"I can't access the AI right now, but a good starting point is to review your long-term goals, "
+            f"prioritize paying down high-interest debt, and maintain a diversified, low-cost investment approach."
+        )
+
         return jsonify({
-            'response': response.text,
-            'advisor': advisor
+            'response': fallback_reply,
+            'advisor': advisor,
+            'fallback': True
         })
-        
+
     except Exception as e:
-        print(f"Error in chat endpoint: {str(e)}")
+        logger.error(f"Error in chat endpoint: {e}")
         return jsonify({'error': f'Failed to generate response: {str(e)}'}), 500
     
 @app.route('/api/transaction-insight', methods=['POST'])
