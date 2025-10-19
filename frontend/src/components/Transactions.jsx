@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react'
+import EnhancedTransactionRow from './EnhancedTransactionRow'
 
-function Transactions() {
+const API_BASE = 'http://localhost:5001';
+
+function Transactions({ categories, tags }) {
   const [transactions, setTransactions] = useState([])
   const [groupedTransactions, setGroupedTransactions] = useState({})
   const [isLoading, setIsLoading] = useState(true)
@@ -29,7 +32,7 @@ function Transactions() {
     try {
       setIsLoading(true)
       const customerId = '68f3e5a29683f20dd519e4ea'
-      const response = await fetch(`/api/get-all-transactions?customerId=${customerId}&days=${dateRange}`)
+      const response = await fetch(`${API_BASE}/get-all-transactions?customerId=${customerId}&days=${dateRange}`)
       
       if (!response.ok) throw new Error('Failed to fetch transactions')
       
@@ -145,6 +148,14 @@ function Transactions() {
       grouped[date].push(t)
     })
     return grouped
+  }
+
+  const handleTransactionUpdate = (updatedTransaction) => {
+    setTransactions(prevTransactions => 
+      prevTransactions
+        .map(t => t._id === updatedTransaction._id ? updatedTransaction : t)
+        .filter(t => !t.deleted)
+    )
   }
 
   if (isLoading) {
@@ -293,7 +304,7 @@ function Transactions() {
         ) : (
           sortedDates.map(date => (
             <div key={date} className="relative">
-              {/* Date Header with Timeline Line */}
+              {/* Date Header */}
               <div className="sticky top-0 bg-black z-10 py-3 mb-4">
                 <div className="flex items-center">
                   <div className="flex-shrink-0 w-3 h-3 bg-white rounded-full mr-4"></div>
@@ -312,44 +323,15 @@ function Transactions() {
 
               {/* Transactions */}
               <div className="ml-8 space-y-3">
-                {groupedByDate[date].map((transaction, idx) => {
-                  const amount = parseFloat(transaction.amount)
-                  const isExpense = amount < 0
-
-                  return (
-                    <div 
-                      key={transaction._id || idx}
-                      className="bg-gray-900 border border-gray-800 rounded-lg p-4 hover:border-gray-700 transition-colors"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3 flex-1">
-                          <div className={`w-10 h-10 ${getCategoryColor(transaction.category)} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                            <span className="text-lg">{getCategoryIcon(transaction.category)}</span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-white font-medium truncate">{transaction.description}</h4>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${getCategoryColor(transaction.category)} text-white`}>
-                                {transaction.category || 'Other'}
-                              </span>
-                              {transaction.account_name && (
-                                <span className="text-xs text-gray-500">{transaction.account_name}</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right flex-shrink-0 ml-4">
-                          <div className={`text-lg font-medium ${isExpense ? 'text-red-400' : 'text-green-400'}`}>
-                            {isExpense ? '-' : '+'}{formatCurrency(Math.abs(amount))}
-                          </div>
-                          {transaction.status && (
-                            <div className="text-xs text-gray-500 capitalize mt-1">{transaction.status}</div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
+                {groupedByDate[date].map((transaction) => (
+                  <EnhancedTransactionRow
+                    key={transaction._id}
+                    transaction={transaction}
+                    categories={categories}
+                    availableTags={tags}
+                    onUpdate={handleTransactionUpdate}
+                  />
+                ))}
               </div>
             </div>
           ))

@@ -4,7 +4,7 @@ import requests
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
 
 # Load environment variables
@@ -18,6 +18,138 @@ genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 
 NESSIE_API_KEY = os.getenv('NESSIE_API_KEY')
 NESSIE_BASE_URL = "http://api.nessieisreal.com"
+
+# ========== NEW: Categories and Tags Management ==========
+CATEGORIES = [
+    'Food & Drink',
+    'Shopping',
+    'Transport',
+    'Bills & Utilities',
+    'Entertainment',
+    'Groceries',
+    'Healthcare',
+    'Salary',
+    'Income',
+    'Other'
+]
+
+TAGS = [
+    'Business',
+    'Personal',
+    'Trip to Japan',
+    'Home Renovation',
+    'Holiday Shopping',
+    'Reimbursable',
+    'Income',
+    'Tax Deductible'
+]
+
+# In-memory storage for transaction updates (in production, use a database)
+TRANSACTION_UPDATES = {}
+
+@app.route('/get-categories', methods=['GET'])
+def get_categories():
+    return jsonify(CATEGORIES)
+
+@app.route('/get-tags', methods=['GET'])
+def get_tags():
+    return jsonify(TAGS)
+
+# ========== NEW: Update Transaction Endpoint ==========
+@app.route('/update-transaction', methods=['POST'])
+def update_transaction():
+    try:
+        data = request.get_json()
+        transaction_id = data.get('transaction_id')
+        updates = data.get('updates')
+        
+        if not transaction_id:
+            return jsonify({'error': 'Missing transaction_id'}), 400
+        
+        # Store updates in memory (in production, update database)
+        TRANSACTION_UPDATES[transaction_id] = {
+            **TRANSACTION_UPDATES.get(transaction_id, {}),
+            **updates,
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        return jsonify({
+            'success': True,
+            'message': 'Transaction updated successfully',
+            'transaction_id': transaction_id,
+            'updates': updates
+        })
+    except Exception as e:
+        print(f"Error updating transaction: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ========== NEW: Delete Transaction Endpoint ==========
+@app.route('/delete-transaction', methods=['POST'])
+def delete_transaction():
+    try:
+        data = request.get_json()
+        transaction_id = data.get('transaction_id')
+        
+        if not transaction_id:
+            return jsonify({'error': 'Missing transaction_id'}), 400
+        
+        # Mark as deleted in memory (in production, update database)
+        TRANSACTION_UPDATES[transaction_id] = {
+            **TRANSACTION_UPDATES.get(transaction_id, {}),
+            'deleted': True,
+            'deleted_at': datetime.now().isoformat()
+        }
+        
+        return jsonify({
+            'success': True,
+            'message': 'Transaction deleted successfully',
+            'transaction_id': transaction_id
+        })
+    except Exception as e:
+        print(f"Error deleting transaction: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ========== NEW: Ask AI Widget Endpoint ==========
+@app.route('/ask-ai-widget', methods=['POST'])
+def ask_ai_widget():
+    try:
+        data = request.get_json()
+        widget_data = data.get('widgetData')
+        widget_name = data.get('widgetName')
+        
+        # Initialize Gemini model
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        
+        # Create the prompt based on widget type
+        prompt = f"""You are a professional financial advisor analyzing data from a user's {widget_name}.
+
+Widget Data:
+{widget_data}
+
+Please provide:
+1. A clear explanation of what this data shows
+2. Key insights and patterns you notice
+3. Actionable recommendations for improvement
+4. Any potential concerns or red flags
+
+Keep your response conversational, helpful, and under 300 words. Focus on being practical and actionable."""
+        
+        # Send to Gemini API
+        response = model.generate_content(prompt)
+        
+        return jsonify({
+            'explanation': response.text,
+            'success': True
+        })
+        
+    except Exception as e:
+        print(f"Error in ask_ai_widget: {e}")
+        return jsonify({
+            'error': str(e),
+            'explanation': 'Unable to generate AI insights at this time. Please try again later.'
+        }), 500
+
+# ========== EXISTING ENDPOINTS (keep all your existing code) ==========
 
 @app.route('/get-dashboard-data', methods=['GET'])
 def get_dashboard_data():
@@ -78,13 +210,20 @@ def get_dashboard_data():
             
             if purchases_response.status_code == 200:
                 purchases = purchases_response.json()
-                all_transactions.extend(purchases[:5])  # Get last 5 from each account
+                # Apply any updates from TRANSACTION_UPDATES
+                for purchase in purchases:
+                    trans_id = purchase.get('_id')
+                    if trans_id in TRANSACTION_UPDATES:
+                        purchase.update(TRANSACTION_UPDATES[trans_id])
+                all_transactions.extend(purchases[:5])
+        
+        # Filter out deleted transactions
+        all_transactions = [t for t in all_transactions if not t.get('deleted', False)]
         
         # Sort by date
         all_transactions.sort(key=lambda x: x.get('purchase_date', ''), reverse=True)
         
         # Calculate budget metrics from transactions
-        from datetime import datetime, timedelta
         today = datetime.now()
         first_of_month = today.replace(day=1)
         
@@ -109,7 +248,7 @@ def get_dashboard_data():
         dashboard_data = {
             'net_worth': {
                 'current': round(net_worth, 2),
-                'change': round(net_worth * 0.04, 2),  # Mock 4% change
+                'change': round(net_worth * 0.04, 2),
                 'change_percent': 4.0
             },
             'budget': {
@@ -146,7 +285,7 @@ def get_dashboard_data():
                     }
                 }
             },
-            'transactions': all_transactions[:10]  # Last 10 transactions for dashboard
+            'transactions': all_transactions[:10]
         }
         
         return jsonify(dashboard_data)
@@ -806,6 +945,16 @@ def get_transactions():
             return jsonify({'error': 'Failed to fetch transactions'}), 500
         
         transactions = transactions_response.json()
+        
+        # Apply updates
+        for transaction in transactions:
+            trans_id = transaction.get('_id')
+            if trans_id in TRANSACTION_UPDATES:
+                transaction.update(TRANSACTION_UPDATES[trans_id])
+        
+        # Filter out deleted
+        transactions = [t for t in transactions if not t.get('deleted', False)]
+        
         return jsonify(transactions)
         
     except Exception as e:
