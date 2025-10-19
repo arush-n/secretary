@@ -5,62 +5,100 @@ function RecentTransactions({ transactions }) {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 2
-    }).format(amount)
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(Math.abs(amount))
   }
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffTime = Math.abs(now - date)
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    
-    if (diffDays === 1) return 'today'
-    if (diffDays === 2) return 'yesterday'
-    if (diffDays <= 7) return `${diffDays - 1} DAYS AGO`
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    try {
+      const date = new Date(dateString)
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return 'Recent'
+      }
+      
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric'
+      })
+    } catch (e) {
+      return 'Recent'
+    }
   }
 
-  const getTransactionIcon = (description) => {
-    const firstLetter = description.charAt(0).toUpperCase()
-    const colors = ['bg-gray-600', 'bg-gray-500', 'bg-gray-400', 'bg-white', 'bg-gray-700']
-    const colorIndex = firstLetter.charCodeAt(0) % colors.length
-    return { letter: firstLetter, color: colors[colorIndex] }
+  const getCategoryIcon = (category) => {
+    const icons = {
+      'Food': '🍔',
+      'Groceries': '🛒',
+      'Shopping': '🛍️',
+      'Transportation': '🚗',
+      'Entertainment': '🎬',
+      'Housing': '🏠',
+      'Utilities': '⚡',
+      'Health': '⚕️',
+      'Income': '💰',
+      'Other': '📦'
+    }
+    return icons[category] || '📦'
+  }
+
+  if (!transactions || transactions.length === 0) {
+    return (
+      <div className="bg-white/[0.02] border border-white/10 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-light text-white">recent transactions</h2>
+        </div>
+        <div className="text-center py-12 text-gray-500">
+          <p className="text-lg mb-2">no transactions yet</p>
+          <p className="text-sm">your recent transactions will appear here</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="bg-black rounded-lg p-6 border border-white/10">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-medium text-white">RECENT TRANSACTIONS</h2>
-        <button className="text-gray-400 text-sm hover:text-white">
-          VIEW ALL →
-        </button>
+    <div className="bg-white/[0.02] border border-white/10 rounded-xl p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-light text-white">recent transactions</h2>
+        <span className="text-sm text-gray-500">{transactions.length} transactions</span>
       </div>
-      
-      <div className="space-y-5">
-        {transactions.slice(0, 5).map((transaction, index) => {
-          const icon = getTransactionIcon(transaction.description)
-          const isNegative = parseFloat(transaction.amount) < 0
+
+      <div className="space-y-3">
+        {transactions.slice(0, 10).map((transaction) => {
+          const isIncome = transaction.type === 'credit'
+          const isExpense = transaction.type === 'debit'
           
           return (
-            <div key={transaction._id || index} className="flex items-center">
-              <div className={`w-6 h-6 ${icon.color} rounded-full flex items-center justify-center mr-4`}>
-                <span className={`text-sm font-medium ${icon.color === 'bg-white' ? 'text-black' : 'text-white'}`}>
-                  {icon.letter}
-                </span>
-              </div>
-              <div className="flex-1">
-                <div className="text-sm text-white font-medium">
-                  {transaction.description}
+            <div 
+              key={transaction.id} 
+              className="flex items-center justify-between py-3 border-b border-white/5 hover:bg-white/[0.02] transition-colors rounded px-2"
+            >
+              <div className="flex items-center gap-4 flex-1">
+                <div className="text-2xl">
+                  {getCategoryIcon(transaction.category)}
                 </div>
-                <div className="text-xs text-gray-500">
-                  {formatDate(transaction.purchase_date)}
+                <div className="flex-1">
+                  <div className="text-white font-light">{transaction.merchant}</div>
+                  <div className="text-sm text-gray-500 flex items-center gap-2">
+                    <span>{formatDate(transaction.date)}</span>
+                    <span>•</span>
+                    <span>{transaction.category}</span>
+                    {transaction.isFixed && (
+                      <>
+                        <span>•</span>
+                        <span className="text-orange-400">📌 fixed</span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className={`text-sm font-medium ${
-                isNegative ? 'text-red-400' : 'text-green-400'
+              
+              <div className={`text-lg font-light ${
+                isIncome ? 'text-green-400' : 'text-red-400'
               }`}>
-                {isNegative ? '-' : '+'}{formatCurrency(Math.abs(parseFloat(transaction.amount)))}
+                {isIncome ? '+' : '-'}{formatCurrency(transaction.amount)}
               </div>
             </div>
           )

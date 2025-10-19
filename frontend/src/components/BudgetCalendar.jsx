@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import logo from '../logo.png'
+import logo from '../assets/logo.png'
 
 const BudgetCalendar = () => {
   const [budget, setBudget] = useState(() => {

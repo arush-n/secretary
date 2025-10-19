@@ -28,3 +28,49 @@ code {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* Global dark-themed scrollbars */
+/* WebKit browsers (Chrome, Edge, Safari) */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #0b0b0b; /* slightly lighter than app background */
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #1f2937; /* dark gray thumb */
+  border-radius: 9999px;
+  border: 2px solid #0b0b0b; /* small border to create spacing */
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #374151; /* lighter on hover */
+}
+
+/* Firefox */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #1f2937 #0b0b0b; /* thumb, track */
+}
+
+/* Optional utility: apply custom scrollbar to specific elements */
+.scrollbar {
+  scrollbar-width: thin; /* Firefox */
+}
+
+.scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.scrollbar::-webkit-scrollbar-track {
+  background: #0b0b0b;
+}
+
+.scrollbar::-webkit-scrollbar-thumb {
+  background-color: #1f2937;
+  border-radius: 9999px;
+  border: 2px solid #0b0b0b;
+}
