@@ -4,21 +4,21 @@ import React, { useState, useRef, useEffect } from 'react'
 const advisorsData = [
   {
     id: 'warren_buffett',
-    name: 'Warren Buffett',
-    description: 'The Oracle of Omaha - seeks wonderful companies at fair prices with strong competitive moats and exceptional management.',
-    personality: 'Value investor focused on long-term wealth building'
+    name: 'warren buffett',
+    description: 'the oracle of omaha - seeks wonderful companies at fair prices with strong competitive moats and exceptional management.',
+    personality: 'value investor focused on long-term wealth building'
   },
   {
     id: 'peter_lynch',
-    name: 'Peter Lynch',
-    description: 'Former Fidelity manager known for "invest in what you know" philosophy and growth investing expertise.',
-    personality: 'Growth investor who believes in thorough research'
+    name: 'peter lynch',
+    description: 'former fidelity manager known for "invest in what you know" philosophy and growth investing expertise.',
+    personality: 'growth investor who believes in thorough research'
   },
   {
     id: 'cathie_wood',
-    name: 'Cathie Wood',
-    description: 'Innovation-focused investor specializing in disruptive technologies and exponential growth companies.',
-    personality: 'Technology and innovation focused investor'
+    name: 'cathie wood',
+    description: 'innovation-focused investor specializing in disruptive technologies and exponential growth companies.',
+    personality: 'technology and innovation focused investor'
   }
 ]
 
@@ -101,7 +101,7 @@ function Chat() {
         </div>
         
         {advisor && (
-          <div className="mt-3 p-3 bg-gray-900 rounded-lg border border-gray-700">
+          <div className="mt-3 p-3 bg-gray-900 rounded-lg border border-white/10">
             <p className="text-sm text-gray-300 leading-relaxed">{advisor.description}</p>
           </div>
         )}
@@ -126,10 +126,10 @@ function Chat() {
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-2xl rounded-lg px-4 py-3 ${
+                className={`max-w-2xl rounded-lg px-4 py-3 border border-white/10 ${
                   msg.role === 'user'
-                    ? 'bg-gray-800 border border-gray-700'
-                    : 'bg-gray-900 border border-gray-700'
+                    ? 'bg-gray-800'
+                    : 'bg-gray-900'
                 }`}
               >
                 <div className="text-xs text-gray-400 mb-1 font-medium">
@@ -142,7 +142,7 @@ function Chat() {
 
           {isLoading && (
             <div className="flex justify-start">
-              <div className="max-w-2xl rounded-lg px-4 py-3 bg-gray-900 border border-gray-700">
+              <div className="max-w-2xl rounded-lg px-4 py-3 bg-gray-900 border border-white/10">
                 <div className="text-xs text-gray-400 mb-1 font-medium">{advisor?.name}</div>
                 <div className="flex gap-1">
                   <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>

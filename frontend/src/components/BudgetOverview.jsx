@@ -27,11 +27,11 @@ function BudgetOverview({ budget }) {
     } else if (diff < 0) {
       return `$${Math.abs(diff).toFixed(0)} UNDER`
     }
-    return 'ON TRACK'
+    return 'on track'
   }
 
   return (
-    <div className="bg-black border border-gray-800 rounded-lg p-6">
+    <div className="bg-black rounded-lg p-6 border border-white/10">
       <div className="flex items-center mb-6">
         <div className="w-6 h-6 bg-gray-800 rounded flex items-center justify-center mr-3">
           <span className="text-white text-sm">💰</span>

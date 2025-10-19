@@ -10,7 +10,7 @@ function NetWorthCard({ netWorth }) {
   }
 
   return (
-    <div className="bg-black border border-gray-800 rounded-lg p-6">
+    <div className="bg-black rounded-lg p-6 border border-white/10">
       <div className="mb-6">
         <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">NET WORTH</h2>
         <div className="text-4xl font-light text-white mb-2">
@@ -36,7 +36,7 @@ function NetWorthCard({ netWorth }) {
       </div>
       
       <div className="flex space-x-1">
-        {['1W', '1M', '3M', 'YTD', '1Y', 'ALL'].map((period, index) => (
+        {['1w', '1m', '3m', 'ytd', '1y', 'all'].map((period, index) => (
           <button
             key={period}
             className={`px-3 py-1 text-xs rounded ${

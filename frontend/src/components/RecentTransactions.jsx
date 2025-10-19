@@ -15,8 +15,8 @@ function RecentTransactions({ transactions }) {
     const diffTime = Math.abs(now - date)
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     
-    if (diffDays === 1) return 'TODAY'
-    if (diffDays === 2) return 'YESTERDAY'
+    if (diffDays === 1) return 'today'
+    if (diffDays === 2) return 'yesterday'
     if (diffDays <= 7) return `${diffDays - 1} DAYS AGO`
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
@@ -29,7 +29,7 @@ function RecentTransactions({ transactions }) {
   }
 
   return (
-    <div className="bg-black border border-gray-800 rounded-lg p-6">
+    <div className="bg-black rounded-lg p-6 border border-white/10">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-lg font-medium text-white">RECENT TRANSACTIONS</h2>
         <button className="text-gray-400 text-sm hover:text-white">

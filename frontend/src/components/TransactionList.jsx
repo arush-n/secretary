@@ -5,7 +5,7 @@ function TransactionList({ transactions }) {
     const colors = {
       'Food & Drink': 'bg-red-500',
       'Shopping': 'bg-purple-500',
-      'Transport': 'bg-blue-500',
+      'Transport': 'bg-indigo-500',
       'Bills & Utilities': 'bg-yellow-500',
       'Entertainment': 'bg-pink-500',
       'Groceries': 'bg-green-500',
