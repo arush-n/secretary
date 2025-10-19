@@ -1197,10 +1197,7 @@ def categorize_recurring(description):
 
 def categorize_transactions(transactions):
     """Use AI to categorize transactions"""
-    try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
-    except:
-        prompt = f"""You are an expert financial analyst with deep expertise in transaction categorization. 
+    prompt = f"""You are an expert financial analyst with deep expertise in transaction categorization. 
 
 TASK: Categorize the following bank transactions with high accuracy.
 
@@ -1236,7 +1233,9 @@ TRANSACTIONS TO CATEGORIZE:
 
 Return only the JSON response:
         """
+    
     try:
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(prompt)
         
         import json
@@ -1794,13 +1793,17 @@ def chat_financial_advice():
         data = request.get_json()
         message = data.get('message', '')
         advisor = data.get('advisor', 'warren_buffett')
-        
+
         if not message:
             return jsonify({'error': 'Message is required'}), 400
-        
-        # Use Gemini to generate advisor response
-        model = genai.GenerativeModel('gemini-2.5-flash')
-    except:
+
+        # Try to initialize Gemini model; if it fails, fall back to a safe offline path
+        model = None
+        try:
+            model = genai.GenerativeModel('gemini-2.5-flash')
+        except Exception as e:
+            logger.warning(f'Gemini model initialization failed: {e}')
+
         # Define comprehensive advisor personas
         advisor_personas = {
             'warren_buffett': """You are Warren Buffett, the legendary value investor and CEO of Berkshire Hathaway.
@@ -1916,7 +1919,7 @@ Remember: Focus on the science and data behind innovations, and help investors u
         }
         
         persona = advisor_personas.get(advisor, advisor_personas['warren_buffett'])
-        
+
         prompt = f"""{persona}
 
 USER QUESTION:
@@ -1933,16 +1936,37 @@ RESPONSE GUIDELINES:
 
 Provide your response now:
 """
-    try:
-        response = model.generate_content(prompt)
+
+        # If model is available, try to generate a response. If generation fails or model
+        # is unavailable, return a safe fallback response instead of raising a 500.
+        if model is not None:
+            try:
+                response = model.generate_content(prompt)
+                return jsonify({
+                    'response': response.text,
+                    'advisor': advisor
+                })
+            except Exception as e:
+                logger.error(f"Gemini generation failed: {e}")
+
+        # Fallback: generate a short, deterministic advisor-style reply so the frontend
+        # receives a usable response even when Gemini is down.
+        advisor_fallbacks = {
+            'warren_buffett': f"The Oracle of Omaha says: {message[:50]}... sounds like a question about {message.split()[0] if message.split() else 'investing'}. My advice: focus on businesses you understand, buy quality companies at fair prices, and think long-term. Remember - time in the market beats timing the market.",
+            'peter_lynch': f"Peter Lynch perspective: {message[:50]}... reminds me of finding investment opportunities in everyday life. Look for companies whose products you use and understand. If you can explain the business to a 10-year-old, it might be worth investigating further.",
+            'cathie_wood': f"Innovation perspective: {message[:50]}... suggests we should consider disruptive technologies and exponential growth curves. Focus on companies positioned to benefit from AI, genomics, robotics, and other transformative platforms over the next 5-10 years."
+        }
         
+        fallback_reply = advisor_fallbacks.get(advisor, advisor_fallbacks['warren_buffett'])
+
         return jsonify({
-            'response': response.text,
-            'advisor': advisor
+            'response': fallback_reply,
+            'advisor': advisor,
+            'notice': 'AI service temporarily unavailable - using enhanced fallback response'
         })
-        
+
     except Exception as e:
-        print(f"Error in chat endpoint: {str(e)}")
+        logger.error(f"Error in chat endpoint: {e}")
         return jsonify({'error': f'Failed to generate response: {str(e)}'}), 500
     
 @app.route('/api/transaction-insight', methods=['POST'])

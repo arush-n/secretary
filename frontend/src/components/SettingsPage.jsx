@@ -37,24 +37,30 @@ const SettingsPage = ({
   const [newItemName, setNewItemName] = useState('');
   const [plaidLinked, setPlaidLinked] = useState(false);
 
-  // Initialize state from props
+  // Initialize state from props only once on mount
   useEffect(() => {
-    const categoriesWithIds = initialCategories.map((name, idx) => ({
-      id: idx,
-      name: name,
-      color: getRandomColor()
-    }));
+    if (initialCategories.length > 0 && categories.length === 0) {
+      const categoriesWithIds = initialCategories.map((name, idx) => ({
+        id: idx,
+        name: name,
+        color: getRandomColor()
+      }));
+      setCategories(categoriesWithIds);
+    }
 
-    const tagsWithIds = initialTags.map((name, idx) => ({
-      id: idx + 1000,
-      name: name,
-      color: getRandomColor()
-    }));
+    if (initialTags.length > 0 && tags.length === 0) {
+      const tagsWithIds = initialTags.map((name, idx) => ({
+        id: idx + 1000,
+        name: name,
+        color: getRandomColor()
+      }));
+      setTags(tagsWithIds);
+    }
 
-    setCategories(categoriesWithIds);
-    setTags(tagsWithIds);
-    setPreferences(initialPreferences || []);
-  }, [initialCategories, initialTags, initialPreferences]);
+    if (initialPreferences && initialPreferences.length > 0 && preferences.length === 0) {
+      setPreferences(initialPreferences);
+    }
+  }, [initialCategories, initialTags, initialPreferences, categories.length, tags.length, preferences.length]);
 
   // Category Management
   const addCategory = () => {

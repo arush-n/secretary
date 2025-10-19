@@ -1,6 +1,17 @@
+@import url('https://fonts.googleapis.com/css2?family=Rockwell:wght@400;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Slab Serif font ONLY for sidebar logo text */
+.sidebar-secretary-font {
+  font-family: 'Rockwell', 'Rockwell Nova', 'Roboto Slab', 'DejaVu Serif', 'Sitka Small', serif;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  text-transform: lowercase;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+}
 
 body {
   margin: 0;

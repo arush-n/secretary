@@ -20,7 +20,7 @@ function LogoBlock() {
   return (
     <div className="flex items-center gap-3">
       <img src={logoUrl} alt="Secretary Logo" className="w-24 h-24 object-contain" />
-      <h1 className="text-xl font-semibold text-white">secretary</h1>
+      <h1 className="text-xl text-white sidebar-secretary-font">secretary</h1>
     </div>
   )
 }

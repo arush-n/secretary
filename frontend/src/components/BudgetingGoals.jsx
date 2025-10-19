@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import secretaryLogo from '../assets/logo.png'
 
 // BudgetCalendar Component (integrated)
 function BudgetCalendar({ 
@@ -278,8 +279,12 @@ function BudgetCalendar({
                 </button>
               ) : (
                 <div className="flex items-start gap-4 p-4 bg-gray-900 border border-gray-800 rounded-lg">
-                  <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-2xl flex-shrink-0">
-                    🤖
+                  <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
+                    <img 
+                      src={secretaryLogo} 
+                      alt="Secretary" 
+                      className="w-12 h-12 object-contain"
+                    />
                   </div>
                   <div>
                     <div className="text-sm font-medium text-white mb-2">Secretary</div>

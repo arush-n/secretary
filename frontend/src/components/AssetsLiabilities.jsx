@@ -76,13 +76,13 @@ function AssetsLiabilities({ assetsLiabilities }) {
             className="bg-green-500 flex items-center justify-center text-white text-xs font-medium"
             style={{ width: `${assetsPercentage}%` }}
           >
-            {assetsPercentage > 15 && `${assetsPercentage.toFixed(0)}%`}
+            {assetsPercentage > 8 && `${assetsPercentage.toFixed(0)}%`}
           </div>
           <div 
             className="bg-red-500 flex items-center justify-center text-white text-xs font-medium"
             style={{ width: `${liabilitiesPercentage}%` }}
           >
-            {liabilitiesPercentage > 15 && `${liabilitiesPercentage.toFixed(0)}%`}
+            {liabilitiesPercentage > 8 && `${liabilitiesPercentage.toFixed(0)}%`}
           </div>
         </div>
       </div>
