@@ -32,11 +32,11 @@ function TransactionList({ transactions }) {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-white mb-6">Recent Transactions</h2>
+      <h2 className="text-2xl font-bold text-white mb-6">recent transactions</h2>
       <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
         {transactions.length === 0 ? (
           <div className="p-8 text-center text-gray-400">
-            No transactions found
+            no transactions found
           </div>
         ) : (
           <div className="divide-y divide-gray-700">

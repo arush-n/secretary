@@ -523,7 +523,7 @@ function DashboardView() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-400">No data available</p>
+          <p className="text-gray-400">no data available</p>
         </div>
       </div>
     )

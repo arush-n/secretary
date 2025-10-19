@@ -183,7 +183,7 @@ function BudgetCalendar({
     <div className="space-y-6">
       {/* Month Navigation */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-light text-white">Calendar View</h2>
+        <h2 className="text-2xl font-light text-white">calendar view</h2>
         <div className="flex items-center gap-4">
           <button
             onClick={goToPreviousMonth}
@@ -220,23 +220,23 @@ function BudgetCalendar({
       {/* Budget Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="bg-black border border-gray-800 rounded-lg p-6">
-          <div className="text-sm text-gray-400 mb-3">Monthly Budget</div>
+          <div className="text-sm text-gray-400 mb-3">monthly budget</div>
           <div className="text-3xl font-light text-white">{formatCurrency(monthlyBudget)}</div>
-          <div className="text-xs text-gray-500 mt-1">Income - Savings</div>
+          <div className="text-xs text-gray-500 mt-1">income - savings</div>
         </div>
 
         <div className="bg-black border border-gray-800 rounded-lg p-6">
-          <div className="text-sm text-gray-400 mb-3">{isCurrentMonth ? 'Spent So Far' : 'Total Spent'}</div>
+          <div className="text-sm text-gray-400 mb-3">{isCurrentMonth ? 'spent so far' : 'total spent'}</div>
           <div className="text-3xl font-light text-white">{formatCurrency(currentActualSpent)}</div>
         </div>
 
         <div className="bg-black border border-gray-800 rounded-lg p-6">
-          <div className="text-sm text-gray-400 mb-3">{isCurrentMonth ? 'Projected Total' : 'Final Total'}</div>
+          <div className="text-sm text-gray-400 mb-3">{isCurrentMonth ? 'projected total' : 'final total'}</div>
           <div className="text-3xl font-light text-white">{formatCurrency(currentProjectedTotal)}</div>
         </div>
 
         <div className="bg-black border border-gray-800 rounded-lg p-6">
-          <div className="text-sm text-gray-400 mb-3">Status</div>
+          <div className="text-sm text-gray-400 mb-3">status</div>
           <div className={`text-2xl font-light ${isOverBudget ? 'text-red-400' : 'text-green-400'}`}>
             {isCurrentMonth ? (
               isOverBudget 
@@ -302,19 +302,19 @@ function BudgetCalendar({
         <div className="flex gap-6 mb-4 text-xs text-gray-500">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-gray-800 border border-gray-600 rounded"></div>
-            <span>Today</span>
+            <span>today</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-gray-950 border border-gray-800 rounded"></div>
-            <span>Past Days</span>
+            <span>past days</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-gray-900/50 border border-gray-800 rounded"></div>
-            <span>Future Days</span>
+            <span>future days</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-orange-400">📌</span>
-            <span>Fixed Charge</span>
+            <span>fixed charge</span>
           </div>
         </div>
 
@@ -689,7 +689,7 @@ function BudgetingGoals() {
       <div className="p-8 flex items-center justify-center min-h-screen bg-black">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading budget data...</p>
+          <p className="text-gray-400">loading budget data...</p>
         </div>
       </div>
     )
@@ -701,8 +701,8 @@ function BudgetingGoals() {
   return (
     <div className="min-h-screen bg-black p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-light text-white">Budgeting & Goals</h1>
-        <p className="text-gray-500 mt-1 text-sm">Manage your budget and track your financial goals</p>
+        <h1 className="text-2xl font-light text-white">budgeting & goals</h1>
+        <p className="text-gray-500 mt-1 text-sm">manage your budget and track your financial goals</p>
       </div>
 
       {/* Tab Navigation */}
@@ -713,7 +713,7 @@ function BudgetingGoals() {
             activeTab === 'overview' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:text-white'
           }`}
         >
-          Overview
+          overview
         </button>
         <button
           onClick={() => setActiveTab('budgets')}
@@ -721,7 +721,7 @@ function BudgetingGoals() {
             activeTab === 'budgets' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:text-white'
           }`}
         >
-          Budgets
+          budgets
         </button>
         <button
           onClick={() => setActiveTab('goals')}
@@ -729,7 +729,7 @@ function BudgetingGoals() {
             activeTab === 'goals' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:text-white'
           }`}
         >
-          Goals
+          goals
         </button>
         <button
           onClick={() => setActiveTab('calendar')}
@@ -737,7 +737,7 @@ function BudgetingGoals() {
             activeTab === 'calendar' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:text-white'
           }`}
         >
-          Calendar
+          calendar
         </button>
       </div>
 
@@ -746,45 +746,45 @@ function BudgetingGoals() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-black border border-gray-800 rounded-lg p-6">
-              <div className="text-sm text-gray-400 mb-2">Monthly Income</div>
+              <div className="text-sm text-gray-400 mb-2">monthly income</div>
               <div className="text-3xl font-light text-green-400">{formatCurrency(monthlyIncome)}</div>
             </div>
             
             <div className="bg-black border border-gray-800 rounded-lg p-6">
-              <div className="text-sm text-gray-400 mb-2">Monthly Budget</div>
+              <div className="text-sm text-gray-400 mb-2">monthly budget</div>
               <div className="text-3xl font-light text-blue-400">{formatCurrency(monthlyBudget)}</div>
               <div className="text-xs text-gray-500 mt-1">
-                Income - Savings ({formatCurrency(totalSavingsAllocation)})
+                income - savings ({formatCurrency(totalSavingsAllocation)})
               </div>
             </div>
             
             <div className="bg-black border border-gray-800 rounded-lg p-6">
-              <div className="text-sm text-gray-400 mb-2">Spent So Far</div>
+              <div className="text-sm text-gray-400 mb-2">spent so far</div>
               <div className="text-3xl font-light text-red-400">{formatCurrency(actualSpent)}</div>
               <div className="text-xs text-gray-500 mt-1">
-                Actual spending to date
+                actual spending to date
               </div>
             </div>
             
             <div className="bg-black border border-gray-800 rounded-lg p-6">
-              <div className="text-sm text-gray-400 mb-2">Projected Total</div>
+              <div className="text-sm text-gray-400 mb-2">projected total</div>
               <div className={`text-3xl font-light ${projectedTotal > monthlyBudget ? 'text-orange-400' : 'text-white'}`}>
                 {formatCurrency(projectedTotal)}
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                Estimated month-end
+                estimated month-end
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
             <div className="bg-black border border-gray-800 rounded-lg p-6">
-              <h3 className="text-lg font-medium text-white mb-4">Spending Breakdown</h3>
+              <h3 className="text-lg font-medium text-white mb-4">spending breakdown</h3>
               
               <div className="space-y-4">
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-white font-medium">Spent So Far</span>
+                    <span className="text-sm text-white font-medium">spent so far</span>
                     <span className="text-sm text-red-400">
                       {formatCurrency(actualSpent)}
                     </span>
@@ -801,7 +801,7 @@ function BudgetingGoals() {
 
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-white font-medium">Predicted Future Spend</span>
+                    <span className="text-sm text-white font-medium">predicted future spend</span>
                     <span className="text-sm text-orange-400">
                       {formatCurrency(projectedTotal - actualSpent)}
                     </span>
@@ -818,7 +818,7 @@ function BudgetingGoals() {
 
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-white font-medium">Budget Remaining</span>
+                    <span className="text-sm text-white font-medium">budget remaining</span>
                     <span className={`text-sm ${(monthlyBudget - projectedTotal) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {formatCurrency(monthlyBudget - projectedTotal)}
                     </span>
@@ -842,14 +842,14 @@ function BudgetingGoals() {
                   onClick={() => setShowGoalModal(true)}
                   className="text-sm text-white bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg"
                 >
-                  + Add Goal
+                  + add goal
                 </button>
               </div>
               
               {goals.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
-                  <p className="text-sm">No goals set yet</p>
-                  <p className="text-xs mt-1">Create a goal to start saving!</p>
+                  <p className="text-sm">no goals set yet</p>
+                  <p className="text-xs mt-1">create a goal to start saving!</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -892,19 +892,19 @@ function BudgetingGoals() {
                 <h3 className="text-white font-medium mb-2">Smart Insights</h3>
                 <div className="space-y-2 text-sm text-gray-300">
                   {savingsRate < 10 && (
-                    <p>• Your savings rate is below the recommended 20%. Consider reviewing your spending habits.</p>
+                    <p>• your savings rate is below the recommended 20%. consider reviewing your spending habits.</p>
                   )}
                   {(monthlyBudget - projectedTotal) < 0 && (
-                    <p className="text-red-400">• ⚠️ You're projected to overspend this month! Review your expenses and cut discretionary spending.</p>
+                    <p className="text-red-400">• ⚠️ you're projected to overspend this month! review your expenses and cut discretionary spending.</p>
                   )}
                   {(monthlyBudget - projectedTotal) > monthlyIncome * 0.3 && (
-                    <p className="text-green-400">• 🎉 Excellent! You're staying well within budget. Consider increasing goal allocations.</p>
+                    <p className="text-green-400">• 🎉 excellent! you're staying well within budget. consider increasing goal allocations.</p>
                   )}
                   {goals.length === 0 && (
-                    <p>• Set specific financial goals to stay motivated and track your progress.</p>
+                    <p>• set specific financial goals to stay motivated and track your progress.</p>
                   )}
                   {projectedTotal > actualSpent * 1.5 && (
-                    <p className="text-yellow-400">• Your projected spending is significantly higher than current spending. Monitor your expenses closely.</p>
+                    <p className="text-yellow-400">• your projected spending is significantly higher than current spending. monitor your expenses closely.</p>
                   )}
                 </div>
               </div>

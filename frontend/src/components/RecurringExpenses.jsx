@@ -156,7 +156,7 @@ const RecurringExpenseRow = ({ expense, categories, availableTags = [], onUpdate
     }`}>
       {localExpense.excluded && (
         <div className="absolute top-2 right-2 bg-yellow-600 text-xs px-2 py-1 rounded text-black font-medium">
-          EXCLUDED
+          excluded
         </div>
       )}
 
@@ -184,13 +184,13 @@ const RecurringExpenseRow = ({ expense, categories, availableTags = [], onUpdate
                   onClick={() => handleFieldSave('description', editValue)}
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition"
                 >
-                  Save
+                  save
                 </button>
                 <button
                   onClick={() => setEditingField(null)}
                   className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition"
                 >
-                  Cancel
+                  cancel
                 </button>
               </div>
             ) : (
@@ -208,7 +208,7 @@ const RecurringExpenseRow = ({ expense, categories, availableTags = [], onUpdate
               </span>
               <span className="flex items-center gap-1">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                Last: {formatDate(localExpense.last_date)}
+                last: {formatDate(localExpense.last_date)}
               </span>
             </div>
 
@@ -317,7 +317,7 @@ const RecurringExpenseRow = ({ expense, categories, availableTags = [], onUpdate
           {isLoadingInsight ? (
             <div className="flex items-center gap-2 text-sm text-gray-400">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              Generating insight...
+              generating insight...
             </div>
           ) : (
             <div>
@@ -349,8 +349,8 @@ const RecurringExpenseRow = ({ expense, categories, availableTags = [], onUpdate
 
 // Main Component
 function RecurringExpenses({ 
-  categories = ['Housing', 'Utilities', 'Insurance', 'Subscriptions', 'Transportation', 'Phone', 'Other'], 
-  tags = ['Personal', 'Business', 'Shared', 'Tax-Deductible'] 
+  categories = ['housing', 'utilities', 'insurance', 'subscriptions', 'transportation', 'phone', 'other'], 
+  tags = ['personal', 'business', 'shared', 'tax-deductible'] 
 }) {
   const [recurringExpenses, setRecurringExpenses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -464,7 +464,7 @@ function RecurringExpenses({
       <div className="p-8 flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-gray-400">Analyzing recurring expenses...</p>
+          <p className="text-gray-400">analyzing recurring expenses...</p>
         </div>
       </div>
     );
@@ -490,8 +490,8 @@ function RecurringExpenses({
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-light text-white">Recurring Expenses</h1>
-        <p className="text-gray-500 mt-1 text-sm">Track and manage your regular bills</p>
+        <h1 className="text-2xl font-light text-white">recurring expenses</h1>
+        <p className="text-gray-500 mt-1 text-sm">track and manage your regular bills</p>
       </div>
 
       {isDemoData && (
@@ -499,9 +499,9 @@ function RecurringExpenses({
           <div className="flex items-start gap-3">
             <span className="text-2xl">ℹ️</span>
             <div>
-              <h3 className="text-white font-medium mb-1">Demo Data</h3>
+              <h3 className="text-white font-medium mb-1">demo data</h3>
               <p className="text-sm text-blue-300">
-                Showing realistic demo recurring expenses. The Nessie API has limited transaction data, so we're displaying typical bills, subscriptions, and loan payments you might have.
+                showing realistic demo recurring expenses. the nessie api has limited transaction data, so we're displaying typical bills, subscriptions, and loan payments you might have.
               </p>
             </div>
           </div>
@@ -510,13 +510,13 @@ function RecurringExpenses({
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="bg-black border border-gray-800 rounded-lg p-6">
-          <div className="text-sm text-gray-400 mb-2">Total Monthly</div>
+          <div className="text-sm text-gray-400 mb-2">total monthly</div>
           <div className="text-3xl font-light text-white">{formatCurrency(totalMonthly)}</div>
           <div className="text-xs text-gray-500 mt-2">{activeExpenses.length} recurring expenses</div>
         </div>
         
         <div className="bg-black border border-gray-800 rounded-lg p-6">
-          <div className="text-sm text-gray-400 mb-2">Due This Week</div>
+          <div className="text-sm text-gray-400 mb-2">due this week</div>
           <div className="text-3xl font-light text-orange-400">
             {upcomingExpenses.filter(e => e.daysUntil <= 7).length}
           </div>
@@ -526,7 +526,7 @@ function RecurringExpenses({
         </div>
 
         <div className="bg-black border border-gray-800 rounded-lg p-6">
-          <div className="text-sm text-gray-400 mb-2">Largest Expense</div>
+          <div className="text-sm text-gray-400 mb-2">largest expense</div>
           <div className="text-3xl font-light text-red-400">
             {activeExpenses.length > 0 
               ? formatCurrency(Math.max(...activeExpenses.map(e => e.average_amount)))
@@ -541,7 +541,7 @@ function RecurringExpenses({
       </div>
 
       <div className="mb-8 bg-black border border-gray-800 rounded-lg p-6">
-        <h3 className="text-lg font-medium text-white mb-4">By Category</h3>
+        <h3 className="text-lg font-medium text-white mb-4">by category</h3>
         <div className="space-y-3">
           {Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).map(([category, total]) => {
             const percentage = total > 0 && totalMonthly > 0 ? (total / totalMonthly) * 100 : 0;
@@ -574,7 +574,7 @@ function RecurringExpenses({
               selectedCategory === 'all' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:text-white'
             }`}
           >
-            All Categories
+            all categories
           </button>
           {Object.keys(categoryTotals).map(category => (
             <button
@@ -596,9 +596,9 @@ function RecurringExpenses({
           <div className="flex items-start gap-3">
             <span className="text-2xl">⏰</span>
             <div>
-              <h3 className="text-white font-medium mb-1">Upcoming Bills</h3>
+              <h3 className="text-white font-medium mb-1">upcoming bills</h3>
               <p className="text-sm text-orange-300">
-                You have {upcomingExpenses.length} bill{upcomingExpenses.length !== 1 ? 's' : ''} due in the next 30 days
+                you have {upcomingExpenses.length} bill{upcomingExpenses.length !== 1 ? 's' : ''} due in the next 30 days
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {upcomingExpenses.slice(0, 3).map((exp, idx) => (
@@ -619,7 +619,7 @@ function RecurringExpenses({
       <div className="space-y-4">
         {filteredExpenses.length === 0 ? (
           <div className="text-center text-gray-500 py-12">
-            <p className="text-lg">No recurring expenses found for this category</p>
+            <p className="text-lg">no recurring expenses found for this category</p>
           </div>
         ) : (
           filteredExpenses.map((expense) => (

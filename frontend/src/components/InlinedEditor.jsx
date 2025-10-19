@@ -34,13 +34,13 @@ export const InlineNameEditor = ({ value, onSave, onCancel }) => {
         onClick={handleSubmit}
         className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition"
       >
-        Save
+        save
       </button>
       <button
         onClick={onCancel}
         className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition"
       >
-        Cancel
+        cancel
       </button>
     </div>
   );
@@ -71,13 +71,13 @@ export const InlineDateEditor = ({ value, onSave, onCancel }) => {
         onClick={() => onSave(date)}
         className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition"
       >
-        Save
+        save
       </button>
       <button
         onClick={onCancel}
         className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition"
       >
-        Cancel
+        cancel
       </button>
     </div>
   );
@@ -106,13 +106,13 @@ export const InlineNoteEditor = ({ value, onSave, onCancel }) => {
           onClick={() => onSave(note)}
           className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition"
         >
-          Save Note
+          save note
         </button>
         <button
           onClick={onCancel}
           className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition"
         >
-          Cancel
+          cancel
         </button>
       </div>
     </div>

@@ -190,25 +190,25 @@ function Transactions({ categories, tags }) {
       <div className="flex-shrink-0 p-8 pb-6 border-b border-white/10">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-light text-white">Transactions</h1>
-            <p className="text-gray-500 mt-1 text-sm">All your transaction history</p>
+            <h1 className="text-2xl font-light text-white">transactions</h1>
+            <p className="text-gray-500 mt-1 text-sm">all your transaction history</p>
           </div>
           
           {/* Date Range Selector */}
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-400">Time Period:</label>
+            <label className="text-sm text-gray-400">time period:</label>
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
               className="bg-gray-900 text-white border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-gray-500 text-sm font-medium"
             >
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="60">Last 60 Days</option>
-              <option value="90">Last 90 Days</option>
-              <option value="180">Last 6 Months</option>
-              <option value="365">Last Year</option>
-              <option value="730">Last 2 Years</option>
+              <option value="7">last 7 days</option>
+              <option value="30">last 30 days</option>
+              <option value="60">last 60 days</option>
+              <option value="90">last 90 days</option>
+              <option value="180">last 6 months</option>
+              <option value="365">last year</option>
+              <option value="730">last 2 years</option>
             </select>
           </div>
         </div>
@@ -220,20 +220,20 @@ function Transactions({ categories, tags }) {
           {/* Stats Overview */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-black border border-gray-800 rounded-lg p-6">
-              <div className="text-sm text-gray-400 mb-2">Total Transactions</div>
+              <div className="text-sm text-gray-400 mb-2">total transactions</div>
               <div className="text-2xl font-light text-white">{filteredTransactions.length}</div>
               <div className="text-xs text-gray-500 mt-1">in selected period</div>
             </div>
             <div className="bg-black border border-gray-800 rounded-lg p-6">
-              <div className="text-sm text-gray-400 mb-2">Total Spent</div>
+              <div className="text-sm text-gray-400 mb-2">total spent</div>
               <div className="text-2xl font-light text-red-400">{formatCurrency(stats.totalSpent)}</div>
             </div>
             <div className="bg-black border border-gray-800 rounded-lg p-6">
-              <div className="text-sm text-gray-400 mb-2">Total Income</div>
+              <div className="text-sm text-gray-400 mb-2">total income</div>
               <div className="text-2xl font-light text-green-400">{formatCurrency(stats.totalIncome)}</div>
             </div>
             <div className="bg-black border border-gray-800 rounded-lg p-6">
-              <div className="text-sm text-gray-400 mb-2">Net Change</div>
+              <div className="text-sm text-gray-400 mb-2">net change</div>
               <div className={`text-2xl font-light ${(stats.totalIncome - stats.totalSpent) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {formatCurrency(stats.totalIncome - stats.totalSpent)}
               </div>
@@ -258,7 +258,7 @@ function Transactions({ categories, tags }) {
                   filter === 'all' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:text-white'
                 }`}
               >
-                All
+                all
               </button>
               <button
                 onClick={() => setFilter('expenses')}
@@ -266,7 +266,7 @@ function Transactions({ categories, tags }) {
                   filter === 'expenses' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:text-white'
                 }`}
               >
-                Expenses
+                expenses
               </button>
               <button
                 onClick={() => setFilter('income')}
@@ -274,7 +274,7 @@ function Transactions({ categories, tags }) {
                   filter === 'income' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:text-white'
                 }`}
               >
-                Income
+                income
               </button>
             </div>
           </div>
@@ -302,7 +302,7 @@ function Transactions({ categories, tags }) {
           <div className="space-y-8">
             {sortedDates.length === 0 ? (
               <div className="text-center text-gray-500 py-12">
-                <p className="text-lg">No transactions found</p>
+                <p className="text-lg">no transactions found</p>
               </div>
             ) : (
               sortedDates.map(date => (

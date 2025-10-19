@@ -4,7 +4,7 @@ function BudgetOverview({ budget }) {
   if (!budget) {
     return (
       <div className="bg-white/[0.02] border border-white/10 rounded-xl p-6">
-        <p className="text-gray-400">Loading budget data...</p>
+        <p className="text-gray-400">loading budget data...</p>
       </div>
     )
   }
@@ -93,7 +93,7 @@ function BudgetOverview({ budget }) {
                     >
                       {/* Tooltip */}
                       <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                        Day {day.day}: {formatCurrency(day.amount)}
+                        day {day.day}: {formatCurrency(day.amount)}
                       </div>
                     </div>
                     
@@ -106,7 +106,7 @@ function BudgetOverview({ budget }) {
               })
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
-                No spending data yet
+                no spending data yet
               </div>
             )}
           </div>

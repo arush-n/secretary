@@ -280,7 +280,7 @@ const EnhancedTransactionRow = ({
         
         {localTransaction.excluded && (
           <div className="absolute top-2 right-2 bg-yellow-600 text-xs px-2 py-1 rounded text-black font-medium">
-            EXCLUDED
+            excluded
           </div>
         )}
 
@@ -435,7 +435,7 @@ const EnhancedTransactionRow = ({
             {isLoadingInsight ? (
               <div className="flex items-center gap-2 text-sm text-gray-400">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Generating insight...
+                generating insight...
               </div>
             ) : (
               <div>

@@ -195,7 +195,7 @@ const SettingsPage = ({
             <Settings className="w-8 h-8 text-blue-400" />
             Settings
           </h1>
-          <p className="text-gray-400 mt-2">Manage your connections, categories, tags, and preferences</p>
+          <p className="text-gray-400 mt-2">manage your connections, categories, tags, and preferences</p>
         </div>
 
         {/* Tabs */}
@@ -209,7 +209,7 @@ const SettingsPage = ({
             }`}
           >
             <Link className="w-4 h-4 inline mr-2" />
-            Connections
+            connections
           </button>
           <button
             onClick={() => setActiveTab('categories')}
@@ -220,7 +220,7 @@ const SettingsPage = ({
             }`}
           >
             <FolderOpen className="w-4 h-4 inline mr-2" />
-            Categories
+            categories
           </button>
           <button
             onClick={() => setActiveTab('tags')}
@@ -231,7 +231,7 @@ const SettingsPage = ({
             }`}
           >
             <Tag className="w-4 h-4 inline mr-2" />
-            Tags
+            tags
           </button>
           <button
             onClick={() => setActiveTab('preferences')}
@@ -242,7 +242,7 @@ const SettingsPage = ({
             }`}
           >
             <Heart className="w-4 h-4 inline mr-2" />
-            Preferences
+            preferences
           </button>
         </div>
 
@@ -251,21 +251,21 @@ const SettingsPage = ({
           <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
             <h2 className="text-xl font-semibold mb-4">Bank Connections</h2>
             <p className="text-gray-400 mb-6">
-              Connect your financial institutions through Plaid to automatically sync transactions in real-time.
+              connect your financial institutions through plaid to automatically sync transactions in real-time.
             </p>
 
             {!plaidLinked ? (
               <div className="bg-gray-800 rounded-lg p-8 text-center border border-gray-700">
                 <Link className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No connections yet</h3>
+                <h3 className="text-lg font-semibold mb-2">no connections yet</h3>
                 <p className="text-gray-400 mb-6">
-                  Connect your bank account to automatically import and categorize your transactions.
+                  connect your bank account to automatically import and categorize your transactions.
                 </p>
                 <button
                   onClick={handlePlaidConnect}
                   className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
                 >
-                  Connect with Plaid
+                  connect with plaid
                 </button>
               </div>
             ) : (
@@ -276,15 +276,15 @@ const SettingsPage = ({
                       <CheckCircle className="w-6 h-6" />
                     </div>
                     <div>
-                      <h3 className="font-semibold">Chase Bank</h3>
-                      <p className="text-sm text-gray-400">Connected • Last synced 2 minutes ago</p>
+                      <h3 className="font-semibold">capital one bank</h3>
+                      <p className="text-sm text-gray-400">connected • Last synced 2 minutes ago</p>
                     </div>
                   </div>
                   <button 
                     onClick={() => setPlaidLinked(false)}
                     className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition"
                   >
-                    Disconnect
+                    disconnect
                   </button>
                 </div>
 
@@ -293,7 +293,7 @@ const SettingsPage = ({
                   className="w-full px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 flex items-center justify-center gap-2 transition"
                 >
                   <Plus className="w-4 h-4" />
-                  Add Another Account
+                  add another account
                 </button>
               </div>
             )}
@@ -301,8 +301,8 @@ const SettingsPage = ({
             <div className="mt-8 p-4 bg-blue-900/20 border border-blue-800 rounded-lg">
               <h4 className="font-semibold text-blue-400 mb-2">About Plaid Integration</h4>
               <p className="text-sm text-gray-300">
-                Plaid securely connects to over 10,000 financial institutions. Your credentials are never stored, 
-                and all data is encrypted. You can disconnect at any time.
+                plaid securely connects to over 10,000 financial institutions. your credentials are never stored, 
+                and all data is encrypted. you can disconnect at any time.
               </p>
             </div>
           </div>
@@ -311,9 +311,9 @@ const SettingsPage = ({
         {/* Categories Tab */}
         {activeTab === 'categories' && (
           <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h2 className="text-xl font-semibold mb-4">Manage Categories</h2>
+            <h2 className="text-xl font-semibold mb-4">manage categories</h2>
             <p className="text-gray-400 mb-6">
-              Categories are high-level groupings that organize your transactions (e.g., Food, Rent, Healthcare).
+              categories are high-level groupings that organize your transactions (e.g., food, rent, healthcare).
             </p>
 
             <div className="mb-6">
@@ -331,7 +331,7 @@ const SettingsPage = ({
                   className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition"
                 >
                   <Plus className="w-4 h-4" />
-                  Add
+                  add
                 </button>
               </div>
             </div>
@@ -339,7 +339,7 @@ const SettingsPage = ({
             <div className="space-y-2">
               {categories.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
-                  No categories yet. Add your first one above!
+                  no categories yet. add your first one above!
                 </div>
               ) : (
                 categories.map(category => (
@@ -406,9 +406,9 @@ const SettingsPage = ({
         {/* Tags Tab */}
         {activeTab === 'tags' && (
           <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h2 className="text-xl font-semibold mb-4">Manage Tags</h2>
+            <h2 className="text-xl font-semibold mb-4">manage tags</h2>
             <p className="text-gray-400 mb-6">
-              Tags are flexible labels for tracking spending across categories. Use them for projects, trips, or themes.
+              tags are flexible labels for tracking spending across categories. use them for projects, trips, or themes.
             </p>
 
             <div className="mb-6">
@@ -426,7 +426,7 @@ const SettingsPage = ({
                   className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition"
                 >
                   <Plus className="w-4 h-4" />
-                  Add
+                  add
                 </button>
               </div>
             </div>
@@ -434,7 +434,7 @@ const SettingsPage = ({
             <div className="space-y-2">
               {tags.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
-                  No tags yet. Add your first one above!
+                  no tags yet. add your first one above!
                 </div>
               ) : (
                 tags.map(tag => (
@@ -497,9 +497,9 @@ const SettingsPage = ({
             </div>
 
             <div className="mt-6 p-4 bg-purple-900/20 border border-purple-800 rounded-lg">
-              <h4 className="font-semibold text-purple-400 mb-2">Example: Trip to Japan</h4>
+              <h4 className="font-semibold text-purple-400 mb-2">example: trip to japan</h4>
               <p className="text-sm text-gray-300">
-                Tag airfare (Transportation), hotels (Travel), and meals (Food) all with "Trip to Japan" 
+                tag airfare (transportation), hotels (travel), and meals (food) all with "trip to japan"
                 to see your total trip cost across categories.
               </p>
             </div>
@@ -509,9 +509,9 @@ const SettingsPage = ({
         {/* Preferences Tab */}
         {activeTab === 'preferences' && (
           <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h2 className="text-xl font-semibold mb-4">Financial Preferences</h2>
+            <h2 className="text-xl font-semibold mb-4">financial preferences</h2>
             <p className="text-gray-400 mb-6">
-              Set your financial priorities in order of importance. This helps tailor insights and recommendations.
+              set your financial priorities in order of importance. this helps tailor insights and recommendations.
             </p>
 
             <div className="mb-6">
@@ -529,7 +529,7 @@ const SettingsPage = ({
                   className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition"
                 >
                   <Plus className="w-4 h-4" />
-                  Add
+                  add
                 </button>
               </div>
             </div>
@@ -538,7 +538,7 @@ const SettingsPage = ({
               {preferences.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   <Heart className="w-12 h-12 mx-auto mb-4 text-gray-700" />
-                  <p>No preferences set. Add what matters most to you!</p>
+                  <p>no preferences set. add what matters most to you!</p>
                 </div>
               ) : (
                 preferences.map((pref, index) => (
@@ -620,13 +620,13 @@ const SettingsPage = ({
             </div>
 
             <div className="mt-6 p-4 bg-yellow-900/20 border border-yellow-800 rounded-lg">
-              <h4 className="font-semibold text-yellow-400 mb-2">💡 Example Preferences</h4>
+              <h4 className="font-semibold text-yellow-400 mb-2">💡 example preferences</h4>
               <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
-                <li>Build 6-month emergency fund</li>
-                <li>Pay off credit card debt</li>
-                <li>Save for house down payment</li>
-                <li>Maximize retirement contributions</li>
-                <li>Reduce dining out expenses</li>
+                <li>build 6-month emergency fund</li>
+                <li>pay off credit card debt</li>
+                <li>save for house down payment</li>
+                <li>maximize retirement contributions</li>
+                <li>reduce dining out expenses</li>
               </ul>
             </div>
           </div>

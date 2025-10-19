@@ -92,7 +92,7 @@ function NetWorthCard({ netWorth, dailyData }) {
     <div className="bg-white/[0.02] border border-white/10 rounded-xl p-6">
       {/* Header */}
       <div className="mb-6">
-        <div className="text-sm text-gray-400 mb-2">NET WORTH</div>
+        <div className="text-sm text-gray-400 mb-2">net worth</div>
         <div className="flex items-baseline gap-4 flex-wrap">
           <div className="text-4xl font-light text-white">
             {formatCurrency(netWorth || 0)}
@@ -101,7 +101,7 @@ function NetWorthCard({ netWorth, dailyData }) {
             <span>{isPositive ? '▲' : '▼'}</span>
             <span>{formatCurrency(Math.abs(change.amount))}</span>
             <span>({Math.abs(change.percentage).toFixed(1)}%)</span>
-            <span className="text-gray-500">Past Month</span>
+            <span className="text-gray-500">past month</span>
           </div>
         </div>
       </div>
@@ -196,8 +196,8 @@ function NetWorthCard({ netWorth, dailyData }) {
                   >
                     <title>
                       Day {data.day}: {formatCurrency(data.netWorth)}
-                      {'\n'}Income: {formatCurrency(data.income)}
-                      {'\n'}Spending: {formatCurrency(data.spending)}
+                      {'\n'}income: {formatCurrency(data.income)}
+                      {'\n'}spending: {formatCurrency(data.spending)}
                     </title>
                   </circle>
                 </g>
@@ -206,7 +206,7 @@ function NetWorthCard({ netWorth, dailyData }) {
           </svg>
         ) : (
           <div className="flex items-center justify-center h-32 text-gray-500 text-sm">
-            Loading chart data...
+            loading chart data...
           </div>
         )}
 

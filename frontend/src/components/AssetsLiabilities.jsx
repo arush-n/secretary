@@ -4,7 +4,7 @@ function AssetsLiabilities({ assetsLiabilities }) {
   if (!assetsLiabilities) {
     return (
       <div className="bg-white/[0.02] border border-white/10 rounded-xl p-6">
-        <p className="text-gray-400">Loading assets data...</p>
+        <p className="text-gray-400">loading assets data...</p>
       </div>
     )
   }
@@ -64,11 +64,11 @@ function AssetsLiabilities({ assetsLiabilities }) {
         <div className="flex items-center gap-4 mb-2">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-green-500 rounded"></div>
-            <span className="text-sm text-gray-400">Assets</span>
+            <span className="text-sm text-gray-400">assets</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-red-500 rounded"></div>
-            <span className="text-sm text-gray-400">Liabilities</span>
+            <span className="text-sm text-gray-400">liabilities</span>
           </div>
         </div>
         <div className="w-full h-8 bg-gray-800 rounded-lg overflow-hidden flex">
@@ -93,13 +93,13 @@ function AssetsLiabilities({ assetsLiabilities }) {
 
         {/* Assets */}
         <div className="bg-white/[0.02] border border-white/5 rounded-lg p-4">
-          <div className="text-sm text-green-400 mb-3 font-medium">Assets</div>
+          <div className="text-sm text-green-400 mb-3 font-medium">assets</div>
           <div className="space-y-2">
             {savingsBalance > 0 && (
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">💰</span>
-                  <span className="text-sm text-gray-300">Savings Account</span>
+                  <span className="text-sm text-gray-300">savings account</span>
                 </div>
                 <span className="text-sm text-white">{formatCurrency(savingsBalance)}</span>
               </div>
@@ -108,32 +108,32 @@ function AssetsLiabilities({ assetsLiabilities }) {
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">🏦</span>
-                  <span className="text-sm text-gray-300">Checking Account</span>
+                  <span className="text-sm text-gray-300">checking account</span>
                 </div>
                 <span className="text-sm text-white">{formatCurrency(checkingBalance)}</span>
               </div>
             )}
             {savingsBalance === 0 && checkingBalance === 0 && (
-              <div className="text-xs text-gray-500">No assets recorded</div>
+              <div className="text-xs text-gray-500">no assets recorded</div>
             )}
           </div>
         </div>
 
         {/* Liabilities */}
         <div className="bg-white/[0.02] border border-white/5 rounded-lg p-4">
-          <div className="text-sm text-red-400 mb-3 font-medium">Liabilities</div>
+          <div className="text-sm text-red-400 mb-3 font-medium">liabilities</div>
           <div className="space-y-2">
             {creditCardBalance > 0 && (
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">💳</span>
-                  <span className="text-sm text-gray-300">Credit Card</span>
+                  <span className="text-sm text-gray-300">credit card</span>
                 </div>
                 <span className="text-sm text-white">{formatCurrency(creditCardBalance)}</span>
               </div>
             )}
             {creditCardBalance === 0 && (
-              <div className="text-xs text-gray-500">No liabilities recorded</div>
+              <div className="text-xs text-gray-500">no liabilities recorded</div>
             )}
           </div>
         </div>
