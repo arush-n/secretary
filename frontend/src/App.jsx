@@ -2,9 +2,11 @@ import React, { useState } from 'react'
 import Sidebar from './components/Sidebar'
 import DashboardView from './components/DashboardView'
 import Chat from './components/Chat'
-import Budgeting from './components/Budgeting'
+import BudgetingGoals from './components/BudgetingGoals'
 import Investments from './components/Investments'
 import Vacations from './components/Vacations'
+import Transactions from './components/Transactions'
+import RecurringExpenses from './components/RecurringExpenses'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -13,10 +15,14 @@ function App() {
     switch (activeTab) {
       case 'dashboard':
         return <DashboardView />
+      case 'transactions':
+        return <Transactions />
+      case 'recurring':
+        return <RecurringExpenses />
       case 'chat':
         return <Chat />
       case 'budgeting':
-        return <Budgeting />
+        return <BudgetingGoals />
       case 'investments':
         return <Investments />
       case 'vacations':
