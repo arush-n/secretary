@@ -8,7 +8,7 @@
   
   Deployment - https://thesecretary.tech (https://github.com/RishikKolpekwar/secretary)
   
-  Built with @RishikKolpekwar, @nikhilsaravanan, and @AmoghThodati2
+  Built by @arush-n, @RishikKolpekwar, @nikhilsaravanan, and @AmoghThodati2
   
   [![React](https://img.shields.io/badge/React-18-blue?logo=react)](https://reactjs.org/)
   [![Flask](https://img.shields.io/badge/Flask-2.3-green?logo=flask)](https://flask.palletsprojects.com/)
