@@ -5,9 +5,7 @@
   ### AI-Powered Personal Finance Dashboard
   
   A comprehensive financial management platform featuring real-time transaction tracking, AI-driven insights, budget planning, and intelligent financial advisory powered by Google Gemini AI and Capital One's Nessie API.
-  
-  Deployment - https://thesecretary.tech (https://github.com/RishikKolpekwar/secretary)
-  
+    
   Built by @arush-n, @RishikKolpekwar, @nikhilsaravanan, and @AmoghThodati2
   
   [![React](https://img.shields.io/badge/React-18-blue?logo=react)](https://reactjs.org/)
