@@ -7,6 +7,8 @@
   
   A comprehensive financial management platform featuring real-time transaction tracking, AI-driven insights, budget planning, and intelligent financial advisory powered by Google Gemini AI and Capital One's Nessie API.
   
+  Deployment - https://secretary-two.vercel.app/ (https://github.com/RishikKolpekwar/secretary)
+  
   [![React](https://img.shields.io/badge/React-18-blue?logo=react)](https://reactjs.org/)
   [![Flask](https://img.shields.io/badge/Flask-2.3-green?logo=flask)](https://flask.palletsprojects.com/)
   [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.0-38bdf8?logo=tailwind-css)](https://tailwindcss.com/)
