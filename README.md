@@ -1,7 +1,6 @@
 <div align="center">
   <img src="frontend/src/assets/banner.png" alt="Secretary Banner" width="100%">
   
-  # Secretary
   
   ### AI-Powered Personal Finance Dashboard
   
