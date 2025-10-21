@@ -4,7 +4,7 @@
   
   ### AI-Powered Personal Finance Dashboard
   
-  A comprehensive financial management platform featuring real-time transaction tracking, AI-driven insights, budget planning, and intelligent financial advisory powered by Google Gemini AI and Capital One's Nessie API.
+  A comprehensive financial management platform featuring real-time transaction tracking, AI-driven insights, budget planning, investment and vacation advising and intelligent financial advisory powered by Google Gemini AI and Capital One's Nessie API.
     
   Built by @arush-n, @RishikKolpekwar, @nikhilsaravanan, and @AmoghThodati2
   
