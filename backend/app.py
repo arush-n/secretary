@@ -7,10 +7,23 @@ import logging
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from collections import defaultdict
+import json
 
 # Suppress gRPC ALTS warnings
 os.environ['GRPC_VERBOSITY'] = 'ERROR'
 os.environ['GRPC_TRACE'] = ''
+
+# Import Plaid SDK
+import plaid
+from plaid.api import plaid_api
+from plaid.model.link_token_create_request import LinkTokenCreateRequest
+from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
+from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
+from plaid.model.accounts_balance_get_request import AccountsBalanceGetRequest
+from plaid.model.transactions_sync_request import TransactionsSyncRequest
+from plaid.model.products import Products
+from plaid.model.country_code import CountryCode
+from plaid.model.sandbox_public_token_create_request import SandboxPublicTokenCreateRequest
 
 # Import AI modules for investment features
 try:
@@ -40,8 +53,37 @@ def log_request():
 # Configure Gemini API
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 
-NESSIE_API_KEY = os.getenv('NESSIE_API_KEY')
-NESSIE_BASE_URL = "http://api.nessieisreal.com"
+# Configure Plaid API
+PLAID_CLIENT_ID = os.getenv('PLAID_CLIENT_ID')
+PLAID_SECRET = os.getenv('PLAID_SECRET')
+PLAID_ENV = os.getenv('PLAID_ENV', 'sandbox')
+
+# Map environment string to Plaid environment
+PLAID_ENV_MAP = {
+    'sandbox': plaid.Environment.Sandbox,
+    'production': plaid.Environment.Production,
+}
+
+
+# Initialize Plaid client
+plaid_configuration = plaid.Configuration(
+    host=PLAID_ENV_MAP.get(PLAID_ENV, plaid.Environment.Sandbox),
+    api_key={
+        'clientId': PLAID_CLIENT_ID,
+        'secret': PLAID_SECRET,
+    }
+)
+api_client = plaid.ApiClient(plaid_configuration)
+plaid_client = plaid_api.PlaidApi(api_client)
+
+# In-memory storage for access tokens and cursors (use database in production)
+PLAID_ACCESS_TOKENS = {}
+PLAID_ITEM_IDS = {}
+PLAID_TRANSACTION_CURSORS = {}
+
+# Default sandbox access token (for demo purposes)
+DEFAULT_ACCESS_TOKEN = None
+
 SEARCHAPI_KEY = os.getenv('SEARCH_API_KEY') or os.getenv('SEARCHAPI_KEY') or os.getenv('SEARCH_APIIO_KEY')
 
 # Initialize AI agents if available
@@ -120,6 +162,228 @@ def get_categories():
 @app.route('/get-tags', methods=['GET'])
 def get_tags():
     return jsonify(TAGS)
+
+# ========== Plaid API Endpoints ==========
+
+def get_or_create_sandbox_token():
+    """Get existing access token or create a new one for sandbox testing"""
+    global DEFAULT_ACCESS_TOKEN
+    
+    if DEFAULT_ACCESS_TOKEN:
+        return DEFAULT_ACCESS_TOKEN
+    
+    try:
+        # Create a sandbox public token
+        pt_request = SandboxPublicTokenCreateRequest(
+            institution_id='ins_109508',  # First Platypus Bank (sandbox institution)
+            initial_products=[Products('transactions'), Products('auth')]
+        )
+        pt_response = plaid_client.sandbox_public_token_create(pt_request)
+        public_token = pt_response['public_token']
+        
+        # Exchange for access token
+        exchange_request = ItemPublicTokenExchangeRequest(public_token=public_token)
+        exchange_response = plaid_client.item_public_token_exchange(exchange_request)
+        
+        DEFAULT_ACCESS_TOKEN = exchange_response['access_token']
+        PLAID_ACCESS_TOKENS['default'] = DEFAULT_ACCESS_TOKEN
+        PLAID_ITEM_IDS['default'] = exchange_response['item_id']
+        
+        logger.info(f"Created sandbox access token for item: {exchange_response['item_id']}")
+        return DEFAULT_ACCESS_TOKEN
+        
+    except plaid.ApiException as e:
+        logger.error(f"Plaid API error creating sandbox token: {e}")
+        raise e
+
+@app.route('/api/create_link_token', methods=['POST'])
+def create_link_token():
+    """Create a Plaid Link token for client-side Link initialization"""
+    try:
+        request_data = LinkTokenCreateRequest(
+            products=[Products('transactions'), Products('auth')],
+            client_name='Secretary Finance',
+            country_codes=[CountryCode('US')],
+            language='en',
+            user=LinkTokenCreateRequestUser(
+                client_user_id='user-' + str(datetime.now().timestamp())
+            )
+        )
+        response = plaid_client.link_token_create(request_data)
+        return jsonify({
+            'link_token': response['link_token'],
+            'expiration': response['expiration']
+        })
+    except plaid.ApiException as e:
+        error_response = json.loads(e.body)
+        logger.error(f"Plaid API error: {error_response}")
+        return jsonify({'error': error_response.get('error_message', 'Failed to create link token')}), 400
+
+@app.route('/api/exchange_public_token', methods=['POST'])
+def exchange_public_token():
+    """Exchange a public token from Plaid Link for an access token"""
+    try:
+        data = request.get_json()
+        public_token = data.get('public_token')
+        
+        if not public_token:
+            return jsonify({'error': 'Missing public_token'}), 400
+        
+        exchange_request = ItemPublicTokenExchangeRequest(public_token=public_token)
+        exchange_response = plaid_client.item_public_token_exchange(exchange_request)
+        
+        access_token = exchange_response['access_token']
+        item_id = exchange_response['item_id']
+        
+        # Store the access token (in production, store securely in database)
+        PLAID_ACCESS_TOKENS[item_id] = access_token
+        PLAID_ITEM_IDS[item_id] = item_id
+        
+        return jsonify({
+            'success': True,
+            'item_id': item_id
+        })
+    except plaid.ApiException as e:
+        error_response = json.loads(e.body)
+        logger.error(f"Plaid API error: {error_response}")
+        return jsonify({'error': error_response.get('error_message', 'Failed to exchange token')}), 400
+
+@app.route('/api/plaid/accounts', methods=['GET'])
+def get_plaid_accounts():
+    """Get account balances from Plaid"""
+    try:
+        # Get or create sandbox access token for demo
+        access_token = get_or_create_sandbox_token()
+        
+        balance_request = AccountsBalanceGetRequest(access_token=access_token)
+        balance_response = plaid_client.accounts_balance_get(balance_request)
+        
+        accounts = []
+        for account in balance_response['accounts']:
+            accounts.append({
+                'account_id': account['account_id'],
+                'name': account['name'],
+                'official_name': account.get('official_name'),
+                'type': account['type'],
+                'subtype': account.get('subtype'),
+                'balance': {
+                    'available': account['balances'].get('available'),
+                    'current': account['balances'].get('current'),
+                    'limit': account['balances'].get('limit'),
+                    'currency': account['balances'].get('iso_currency_code', 'USD')
+                },
+                'mask': account.get('mask')
+            })
+        
+        return jsonify({
+            'accounts': accounts,
+            'item_id': balance_response['item']['item_id']
+        })
+    except plaid.ApiException as e:
+        error_response = json.loads(e.body)
+        logger.error(f"Plaid API error: {error_response}")
+        return jsonify({'error': error_response.get('error_message', 'Failed to get accounts')}), 400
+    except Exception as e:
+        logger.error(f"Error getting accounts: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/plaid/transactions', methods=['GET'])
+def get_plaid_transactions():
+    """Get transactions using Plaid's transactions/sync endpoint with cursor-based pagination"""
+    try:
+        # Get or create sandbox access token for demo
+        access_token = get_or_create_sandbox_token()
+        
+        # Get cursor if it exists
+        cursor = PLAID_TRANSACTION_CURSORS.get('default', '')
+        
+        all_transactions = []
+        has_more = True
+        
+        while has_more:
+            sync_request = TransactionsSyncRequest(
+                access_token=access_token,
+                cursor=cursor if cursor else None
+            )
+            sync_response = plaid_client.transactions_sync(sync_request)
+            
+            # Process added transactions
+            for transaction in sync_response['added']:
+                all_transactions.append({
+                    'transaction_id': transaction['transaction_id'],
+                    'account_id': transaction['account_id'],
+                    'date': transaction['date'],
+                    'name': transaction['name'],
+                    'merchant_name': transaction.get('merchant_name'),
+                    'amount': transaction['amount'],  # Positive = expense, negative = income in Plaid
+                    'category': transaction.get('category', []),
+                    'category_id': transaction.get('category_id'),
+                    'pending': transaction['pending'],
+                    'payment_channel': transaction.get('payment_channel'),
+                    'location': {
+                        'city': transaction['location'].get('city') if transaction.get('location') else None,
+                        'region': transaction['location'].get('region') if transaction.get('location') else None,
+                    } if transaction.get('location') else None
+                })
+            
+            # Update cursor for next sync
+            cursor = sync_response['next_cursor']
+            has_more = sync_response['has_more']
+            
+            # Limit iterations for safety
+            if len(all_transactions) > 500:
+                break
+        
+        # Store cursor for future syncs
+        PLAID_TRANSACTION_CURSORS['default'] = cursor
+        
+        # Sort by date (newest first)
+        all_transactions.sort(key=lambda x: x['date'], reverse=True)
+        
+        return jsonify({
+            'transactions': all_transactions,
+            'total_count': len(all_transactions)
+        })
+    except plaid.ApiException as e:
+        error_response = json.loads(e.body)
+        logger.error(f"Plaid API error: {error_response}")
+        return jsonify({'error': error_response.get('error_message', 'Failed to get transactions')}), 400
+    except Exception as e:
+        logger.error(f"Error getting transactions: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def transform_plaid_transaction_to_legacy(plaid_transaction):
+    """Transform a Plaid transaction to match the legacy Nessie format for backward compatibility"""
+    # Plaid uses positive amounts for expenses, we negate for our format
+    amount = plaid_transaction['amount']
+    
+    return {
+        '_id': plaid_transaction['transaction_id'],
+        'purchase_date': plaid_transaction['date'],
+        'description': plaid_transaction.get('merchant_name') or plaid_transaction['name'],
+        'amount': -amount if amount > 0 else abs(amount),  # Expenses negative, income positive
+        'status': 'pending' if plaid_transaction['pending'] else 'executed',
+        'category': plaid_transaction['category'][0] if plaid_transaction.get('category') else 'Other',
+        'merchant_id': plaid_transaction.get('merchant_name'),
+        'account_id': plaid_transaction['account_id']
+    }
+
+def transform_plaid_account_to_legacy(plaid_account):
+    """Transform a Plaid account to match the legacy Nessie format for backward compatibility"""
+    # Map Plaid account types to legacy types
+    type_mapping = {
+        'depository': 'Checking' if plaid_account.get('subtype') == 'checking' else 'Savings',
+        'credit': 'Credit Card',
+        'loan': 'Loan',
+        'investment': 'Investment'
+    }
+    
+    return {
+        '_id': plaid_account['account_id'],
+        'type': type_mapping.get(plaid_account['type'], 'Other'),
+        'nickname': plaid_account['name'],
+        'balance': plaid_account['balance']['current'] or 0
+    }
 
 # ========== Vacation & Flight Search Endpoints ==========
 def _cheapest_flight_response(arrival: str, outbound_date: str, return_date: str):
@@ -477,17 +741,70 @@ def get_dashboard_data():
     try:
         customer_id = request.args.get('customerId')
         
-        if not customer_id or not NESSIE_API_KEY:
-            return jsonify({'error': 'Missing customerId or API key'}), 400
-        
-        # Get customer accounts
-        accounts_url = f"{NESSIE_BASE_URL}/customers/{customer_id}/accounts?key={NESSIE_API_KEY}"
-        accounts_response = requests.get(accounts_url)
-        
-        if accounts_response.status_code != 200:
-            return jsonify({'error': 'Failed to fetch accounts'}), 500
-        
-        accounts_data = accounts_response.json()
+        # Try to get data from Plaid
+        try:
+            access_token = get_or_create_sandbox_token()
+            
+            # Get accounts from Plaid
+            balance_request = AccountsBalanceGetRequest(access_token=access_token)
+            balance_response = plaid_client.accounts_balance_get(balance_request)
+            
+            # Transform Plaid accounts to legacy format
+            accounts_data = [transform_plaid_account_to_legacy({
+                'account_id': acc['account_id'],
+                'name': acc['name'],
+                'type': acc['type'],
+                'subtype': acc.get('subtype'),
+                'balance': {
+                    'current': acc['balances'].get('current'),
+                    'available': acc['balances'].get('available')
+                }
+            }) for acc in balance_response['accounts']]
+            
+            # Get transactions from Plaid
+            cursor = PLAID_TRANSACTION_CURSORS.get('default', '')
+            all_plaid_transactions = []
+            has_more = True
+            
+            while has_more:
+                sync_request = TransactionsSyncRequest(
+                    access_token=access_token,
+                    cursor=cursor if cursor else None
+                )
+                sync_response = plaid_client.transactions_sync(sync_request)
+                
+                for trans in sync_response['added']:
+                    all_plaid_transactions.append({
+                        'transaction_id': trans['transaction_id'],
+                        'account_id': trans['account_id'],
+                        'date': trans['date'],
+                        'name': trans['name'],
+                        'merchant_name': trans.get('merchant_name'),
+                        'amount': trans['amount'],
+                        'category': trans.get('category', []),
+                        'pending': trans['pending']
+                    })
+                
+                cursor = sync_response['next_cursor']
+                has_more = sync_response['has_more']
+                
+                if len(all_plaid_transactions) > 100:
+                    break
+            
+            PLAID_TRANSACTION_CURSORS['default'] = cursor
+            
+            # Transform to legacy format
+            all_transactions = [transform_plaid_transaction_to_legacy(t) for t in all_plaid_transactions]
+            
+        except plaid.ApiException as e:
+            logger.warning(f"Plaid API error, falling back to mock data: {e}")
+            # Fall back to mock data if Plaid fails
+            accounts_data = []
+            all_transactions = generate_realistic_transactions(30, [])
+        except Exception as e:
+            logger.warning(f"Error getting Plaid data, falling back to mock: {e}")
+            accounts_data = []
+            all_transactions = generate_realistic_transactions(30, [])
         
         # Calculate real net worth from accounts
         total_assets = 0
@@ -501,42 +818,27 @@ def get_dashboard_data():
             
             if account_type in ['checking', 'savings']:
                 total_assets += balance
-                assets_breakdown[account_type] += balance
+                if account_type == 'checking':
+                    assets_breakdown['checking'] += balance
+                else:
+                    assets_breakdown['savings'] += balance
             elif account_type == 'credit card':
                 total_liabilities += abs(balance)
                 liabilities_breakdown['credit_cards'] += abs(balance)
-        
-        # Get loans
-        all_loans = []
-        for account in accounts_data:
-            account_id = account['_id']
-            loans_url = f"{NESSIE_BASE_URL}/accounts/{account_id}/loans?key={NESSIE_API_KEY}"
-            loans_response = requests.get(loans_url)
-            
-            if loans_response.status_code == 200:
-                loans = loans_response.json()
-                for loan in loans:
-                    loan_amount = float(loan.get('amount', 0))
-                    total_liabilities += loan_amount
-                    liabilities_breakdown['loans'] += loan_amount
+            elif account_type == 'investment':
+                total_assets += balance
+                assets_breakdown['investments'] += balance
+            elif account_type == 'loan':
+                total_liabilities += abs(balance)
+                liabilities_breakdown['loans'] += abs(balance)
         
         net_worth = total_assets - total_liabilities
         
-        # Get recent transactions for summary (last 30 days)
-        all_transactions = []
-        for account in accounts_data:
-            account_id = account['_id']
-            purchases_url = f"{NESSIE_BASE_URL}/accounts/{account_id}/purchases?key={NESSIE_API_KEY}"
-            purchases_response = requests.get(purchases_url)
-            
-            if purchases_response.status_code == 200:
-                purchases = purchases_response.json()
-                # Apply any updates from TRANSACTION_UPDATES
-                for purchase in purchases:
-                    trans_id = purchase.get('_id')
-                    if trans_id in TRANSACTION_UPDATES:
-                        purchase.update(TRANSACTION_UPDATES[trans_id])
-                all_transactions.extend(purchases[:5])
+        # Apply any updates from TRANSACTION_UPDATES
+        for transaction in all_transactions:
+            trans_id = transaction.get('_id')
+            if trans_id in TRANSACTION_UPDATES:
+                transaction.update(TRANSACTION_UPDATES[trans_id])
         
         # Filter out deleted transactions
         all_transactions = [t for t in all_transactions if not t.get('deleted', False)]
@@ -615,6 +917,7 @@ def get_dashboard_data():
         print(f"Error in get_dashboard_data: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 # ========== All Transactions Endpoint ==========
 @app.route('/get-all-transactions', methods=['GET'])
 def get_all_transactions():
@@ -622,44 +925,89 @@ def get_all_transactions():
         customer_id = request.args.get('customerId')
         days = request.args.get('days', '30')  # Default to 30 days
         
-        if not customer_id or not NESSIE_API_KEY:
-            return jsonify({'error': 'Missing customerId or API key'}), 400
-        
         try:
             days_int = int(days)
         except:
             days_int = 30
         
-        # Get customer accounts
-        accounts_url = f"{NESSIE_BASE_URL}/customers/{customer_id}/accounts?key={NESSIE_API_KEY}"
-        accounts_response = requests.get(accounts_url)
-        
-        if accounts_response.status_code != 200:
-            return jsonify({'error': 'Failed to fetch accounts'}), 500
-        
-        accounts_data = accounts_response.json()
+        accounts_data = []
         all_transactions = []
         
-        # Get transactions from all accounts
-        for account in accounts_data:
-            account_id = account['_id']
+        # Try to get data from Plaid
+        try:
+            access_token = get_or_create_sandbox_token()
             
-            # Get purchases
-            purchases_url = f"{NESSIE_BASE_URL}/accounts/{account_id}/purchases?key={NESSIE_API_KEY}"
-            purchases_response = requests.get(purchases_url)
+            # Get accounts from Plaid
+            balance_request = AccountsBalanceGetRequest(access_token=access_token)
+            balance_response = plaid_client.accounts_balance_get(balance_request)
             
-            if purchases_response.status_code == 200:
-                purchases = purchases_response.json()
-                for purchase in purchases:
-                    purchase['account_type'] = account.get('type', 'Unknown')
-                    purchase['account_name'] = account.get('nickname', 'Account')
-                    
-                    # Apply updates from TRANSACTION_UPDATES
-                    trans_id = purchase.get('_id')
-                    if trans_id in TRANSACTION_UPDATES:
-                        purchase.update(TRANSACTION_UPDATES[trans_id])
-                    
-                    all_transactions.append(purchase)
+            # Transform Plaid accounts to legacy format
+            accounts_data = [transform_plaid_account_to_legacy({
+                'account_id': acc['account_id'],
+                'name': acc['name'],
+                'type': acc['type'],
+                'subtype': acc.get('subtype'),
+                'balance': {
+                    'current': acc['balances'].get('current'),
+                    'available': acc['balances'].get('available')
+                }
+            }) for acc in balance_response['accounts']]
+            
+            # Get transactions from Plaid
+            cursor = PLAID_TRANSACTION_CURSORS.get('default', '')
+            all_plaid_transactions = []
+            has_more = True
+            
+            while has_more:
+                sync_request = TransactionsSyncRequest(
+                    access_token=access_token,
+                    cursor=cursor if cursor else None
+                )
+                sync_response = plaid_client.transactions_sync(sync_request)
+                
+                for trans in sync_response['added']:
+                    all_plaid_transactions.append({
+                        'transaction_id': trans['transaction_id'],
+                        'account_id': trans['account_id'],
+                        'date': trans['date'],
+                        'name': trans['name'],
+                        'merchant_name': trans.get('merchant_name'),
+                        'amount': trans['amount'],
+                        'category': trans.get('category', []),
+                        'pending': trans['pending']
+                    })
+                
+                cursor = sync_response['next_cursor']
+                has_more = sync_response['has_more']
+                
+                if len(all_plaid_transactions) > 500:
+                    break
+            
+            PLAID_TRANSACTION_CURSORS['default'] = cursor
+            
+            # Transform to legacy format with account info
+            for plaid_trans in all_plaid_transactions:
+                legacy_trans = transform_plaid_transaction_to_legacy(plaid_trans)
+                # Find matching account
+                for acc in accounts_data:
+                    if acc['_id'] == plaid_trans['account_id']:
+                        legacy_trans['account_type'] = acc.get('type', 'Unknown')
+                        legacy_trans['account_name'] = acc.get('nickname', 'Account')
+                        break
+                all_transactions.append(legacy_trans)
+                
+        except plaid.ApiException as e:
+            logger.warning(f"Plaid API error, using mock data: {e}")
+            all_transactions = generate_realistic_transactions(days_int, accounts_data)
+        except Exception as e:
+            logger.warning(f"Error getting Plaid data, using mock: {e}")
+            all_transactions = generate_realistic_transactions(days_int, accounts_data)
+        
+        # Apply updates from TRANSACTION_UPDATES
+        for transaction in all_transactions:
+            trans_id = transaction.get('_id')
+            if trans_id in TRANSACTION_UPDATES:
+                transaction.update(TRANSACTION_UPDATES[trans_id])
         
         # Filter out deleted transactions
         all_transactions = [t for t in all_transactions if not t.get('deleted', False)]
@@ -674,7 +1022,7 @@ def get_all_transactions():
         filtered_transactions = []
         for transaction in all_transactions:
             try:
-                trans_date = datetime.strptime(transaction.get('purchase_date', ''), '%Y-%m-%d')
+                trans_date = datetime.strptime(str(transaction.get('purchase_date', '')), '%Y-%m-%d')
                 if trans_date >= cutoff_date:
                     filtered_transactions.append(transaction)
             except:
@@ -716,6 +1064,7 @@ def get_all_transactions():
     except Exception as e:
         print(f"Error in get_all_transactions: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 def generate_realistic_transactions(days, accounts):
     """Generate realistic transaction data for demonstration"""
@@ -800,89 +1149,59 @@ def get_recurring_expenses():
     try:
         customer_id = request.args.get('customerId')
         
-        if not customer_id or not NESSIE_API_KEY:
-            return jsonify({'error': 'Missing customerId or API key'}), 400
-        
-        # Get customer accounts
-        accounts_url = f"{NESSIE_BASE_URL}/customers/{customer_id}/accounts?key={NESSIE_API_KEY}"
-        accounts_response = requests.get(accounts_url)
-        
-        if accounts_response.status_code != 200:
-            return jsonify({'error': 'Failed to fetch accounts'}), 500
-        
-        accounts_data = accounts_response.json()
-        
-        # Get bills from all accounts
-        all_bills = []
         all_transactions = []
-        all_loans = []
         
-        for account in accounts_data:
-            account_id = account['_id']
+        # Try to get data from Plaid
+        try:
+            access_token = get_or_create_sandbox_token()
             
-            # Get bills for this account
-            bills_url = f"{NESSIE_BASE_URL}/accounts/{account_id}/bills?key={NESSIE_API_KEY}"
-            bills_response = requests.get(bills_url)
+            # Get transactions from Plaid
+            cursor = PLAID_TRANSACTION_CURSORS.get('default', '')
+            all_plaid_transactions = []
+            has_more = True
             
-            if bills_response.status_code == 200:
-                bills = bills_response.json()
-                for bill in bills:
-                    bill['account_type'] = account.get('type', 'Unknown')
-                    all_bills.append(bill)
+            while has_more:
+                sync_request = TransactionsSyncRequest(
+                    access_token=access_token,
+                    cursor=cursor if cursor else None
+                )
+                sync_response = plaid_client.transactions_sync(sync_request)
+                
+                for trans in sync_response['added']:
+                    all_plaid_transactions.append({
+                        'transaction_id': trans['transaction_id'],
+                        'account_id': trans['account_id'],
+                        'date': trans['date'],
+                        'name': trans['name'],
+                        'merchant_name': trans.get('merchant_name'),
+                        'amount': trans['amount'],
+                        'category': trans.get('category', []),
+                        'pending': trans['pending']
+                    })
+                
+                cursor = sync_response['next_cursor']
+                has_more = sync_response['has_more']
+                
+                if len(all_plaid_transactions) > 500:
+                    break
             
-            # Get purchases for pattern detection
-            purchases_url = f"{NESSIE_BASE_URL}/accounts/{account_id}/purchases?key={NESSIE_API_KEY}"
-            purchases_response = requests.get(purchases_url)
+            PLAID_TRANSACTION_CURSORS['default'] = cursor
             
-            if purchases_response.status_code == 200:
-                purchases = purchases_response.json()
-                all_transactions.extend(purchases)
+            # Transform to legacy format
+            all_transactions = [transform_plaid_transaction_to_legacy(t) for t in all_plaid_transactions]
             
-            # Get loans
-            loans_url = f"{NESSIE_BASE_URL}/accounts/{account_id}/loans?key={NESSIE_API_KEY}"
-            loans_response = requests.get(loans_url)
-            
-            if loans_response.status_code == 200:
-                loans = loans_response.json()
-                all_loans.extend(loans)
+        except plaid.ApiException as e:
+            logger.warning(f"Plaid API error, using mock transactions: {e}")
+            all_transactions = generate_realistic_transactions(90, [])
+        except Exception as e:
+            logger.warning(f"Error getting Plaid data: {e}")
+            all_transactions = generate_realistic_transactions(90, [])
         
-        # Convert bills to recurring expenses format
-        recurring_from_bills = []
-        for bill in all_bills:
-            recurring_from_bills.append({
-                'description': bill.get('payee', 'Bill Payment'),
-                'average_amount': abs(float(bill.get('payment_amount', 0))),
-                'frequency': map_bill_status_to_frequency(bill.get('status', 'recurring')),
-                'occurrences': 1,
-                'last_date': bill.get('payment_date', None),
-                'next_due': bill.get('upcoming_payment_date', calculate_next_due(bill.get('payment_date'))),
-                'category': categorize_recurring(bill.get('payee', '')),
-                'transactions': [],
-                'source': 'bill',
-                'bill_id': bill.get('_id')
-            })
-        
-        # Convert loans to recurring expenses
-        recurring_from_loans = []
-        for loan in all_loans:
-            recurring_from_loans.append({
-                'description': f"{loan.get('type', 'Loan')} Payment",
-                'average_amount': abs(float(loan.get('monthly_payment', 0))),
-                'frequency': 'Monthly',
-                'occurrences': 1,
-                'last_date': None,
-                'next_due': calculate_next_due(None),
-                'category': 'Loans',
-                'transactions': [],
-                'source': 'loan',
-                'loan_id': loan.get('_id')
-            })
-        
-        # Detect recurring from transaction patterns
+        # Detect recurring from transaction patterns (Plaid doesn't have bills/loans like Nessie)
         recurring_from_patterns = detect_recurring_expenses(all_transactions)
         
         # Combine all recurring expenses
-        all_recurring = recurring_from_bills + recurring_from_loans + recurring_from_patterns
+        all_recurring = recurring_from_patterns
         
         # If no data found, provide realistic demo data
         if len(all_recurring) == 0:
@@ -901,6 +1220,7 @@ def get_recurring_expenses():
     except Exception as e:
         print(f"Error in get_recurring_expenses: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 def map_bill_status_to_frequency(status):
     """Map bill status to frequency"""
@@ -1260,38 +1580,53 @@ def get_transactions():
     try:
         customer_id = request.args.get('customerId')
         
-        if not customer_id or not NESSIE_API_KEY:
-            return jsonify({'error': 'Missing customerId or API key'}), 400
+        transactions = []
         
-        # Get customer accounts
-        accounts_url = f"{NESSIE_BASE_URL}/customers/{customer_id}/accounts?key={NESSIE_API_KEY}"
-        accounts_response = requests.get(accounts_url)
-        
-        if accounts_response.status_code != 200:
-            return jsonify({'error': f'Failed to fetch accounts: {accounts_response.status_code}'}), 500
-        
-        accounts_data = accounts_response.json()
-        
-        # Find primary checking account
-        checking_account = None
-        for account in accounts_data:
-            if account.get('type') == 'Checking':
-                checking_account = account
-                break
-        
-        if not checking_account:
-            return jsonify({'error': 'No checking account found'}), 404
-        
-        account_id = checking_account['_id']
-        
-        # Get transactions for the account
-        transactions_url = f"{NESSIE_BASE_URL}/accounts/{account_id}/purchases?key={NESSIE_API_KEY}"
-        transactions_response = requests.get(transactions_url)
-        
-        if transactions_response.status_code != 200:
-            return jsonify({'error': 'Failed to fetch transactions'}), 500
-        
-        transactions = transactions_response.json()
+        # Try to get data from Plaid
+        try:
+            access_token = get_or_create_sandbox_token()
+            
+            # Get transactions from Plaid
+            cursor = PLAID_TRANSACTION_CURSORS.get('default', '')
+            all_plaid_transactions = []
+            has_more = True
+            
+            while has_more:
+                sync_request = TransactionsSyncRequest(
+                    access_token=access_token,
+                    cursor=cursor if cursor else None
+                )
+                sync_response = plaid_client.transactions_sync(sync_request)
+                
+                for trans in sync_response['added']:
+                    all_plaid_transactions.append({
+                        'transaction_id': trans['transaction_id'],
+                        'account_id': trans['account_id'],
+                        'date': trans['date'],
+                        'name': trans['name'],
+                        'merchant_name': trans.get('merchant_name'),
+                        'amount': trans['amount'],
+                        'category': trans.get('category', []),
+                        'pending': trans['pending']
+                    })
+                
+                cursor = sync_response['next_cursor']
+                has_more = sync_response['has_more']
+                
+                if len(all_plaid_transactions) > 100:
+                    break
+            
+            PLAID_TRANSACTION_CURSORS['default'] = cursor
+            
+            # Transform to legacy format
+            transactions = [transform_plaid_transaction_to_legacy(t) for t in all_plaid_transactions]
+            
+        except plaid.ApiException as e:
+            logger.warning(f"Plaid API error, using mock transactions: {e}")
+            transactions = generate_realistic_transactions(30, [])
+        except Exception as e:
+            logger.warning(f"Error getting Plaid data: {e}")
+            transactions = generate_realistic_transactions(30, [])
         
         # Apply updates
         for transaction in transactions:
@@ -1307,6 +1642,7 @@ def get_transactions():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 # ========== Transaction History Endpoint ==========
 @app.route('/get-transaction-history', methods=['GET'])
 def get_transaction_history():
@@ -1314,82 +1650,101 @@ def get_transaction_history():
         customer_id = request.args.get('customerId')
         limit = int(request.args.get('limit', 100))
         page = int(request.args.get('page', 1))
-        use_nessie = request.args.get('use_nessie', 'false').lower() == 'true'
+        use_plaid = request.args.get('use_plaid', 'true').lower() == 'true'
         
-        # Try to use Nessie API first, fallback to mock data
-        if use_nessie and NESSIE_API_KEY and customer_id:
+        transformed_transactions = []
+        source = 'mock'
+        
+        # Try to use Plaid API first, fallback to mock data
+        if use_plaid:
             try:
-                # Get customer accounts
-                accounts_url = f"{NESSIE_BASE_URL}/customers/{customer_id}/accounts?key={NESSIE_API_KEY}"
-                accounts_response = requests.get(accounts_url)
+                access_token = get_or_create_sandbox_token()
                 
-                if accounts_response.status_code == 200:
-                    accounts_data = accounts_response.json()
+                # Get transactions from Plaid
+                cursor = PLAID_TRANSACTION_CURSORS.get('default', '')
+                all_plaid_transactions = []
+                has_more = True
+                
+                while has_more:
+                    sync_request = TransactionsSyncRequest(
+                        access_token=access_token,
+                        cursor=cursor if cursor else None
+                    )
+                    sync_response = plaid_client.transactions_sync(sync_request)
                     
-                    # Find primary checking account
-                    checking_account = None
-                    for account in accounts_data:
-                        if account.get('type') == 'Checking':
-                            checking_account = account
-                            break
+                    for trans in sync_response['added']:
+                        all_plaid_transactions.append({
+                            'transaction_id': trans['transaction_id'],
+                            'account_id': trans['account_id'],
+                            'date': trans['date'],
+                            'name': trans['name'],
+                            'merchant_name': trans.get('merchant_name'),
+                            'amount': trans['amount'],
+                            'category': trans.get('category', []),
+                            'pending': trans['pending']
+                        })
                     
-                    if checking_account:
-                        account_id = checking_account['_id']
-                        
-                        # Get transactions for the account
-                        transactions_url = f"{NESSIE_BASE_URL}/accounts/{account_id}/purchases?key={NESSIE_API_KEY}"
-                        transactions_response = requests.get(transactions_url)
-                        
-                        if transactions_response.status_code == 200:
-                            nessie_transactions = transactions_response.json()
-                            
-                            # Transform Nessie data to our format
-                            transformed_transactions = []
-                            for idx, t in enumerate(nessie_transactions):
-                                # Categorize based on description
-                                category = categorize_transaction_simple(t.get('description', ''))
-                                
-                                transformed_transactions.append({
-                                    'id': t.get('_id', f'nessie-{idx}'),
-                                    'date': t.get('purchase_date', ''),
-                                    'description': t.get('description', 'Unknown Transaction'),
-                                    'amount': -float(t.get('amount', 0)),  # Make expenses negative
-                                    'category': category,
-                                    'status': t.get('status', 'executed')
-                                })
-                            
-                            # Sort by date (newest first)
-                            transformed_transactions.sort(key=lambda x: x['date'], reverse=True)
-                            
-                            # Apply pagination
-                            start_idx = (page - 1) * limit
-                            end_idx = start_idx + limit
-                            paginated_transactions = transformed_transactions[start_idx:end_idx]
-                            
-                            return jsonify({
-                                'transactions': paginated_transactions,
-                                'total_count': len(transformed_transactions),
-                                'source': 'nessie'
-                            })
+                    cursor = sync_response['next_cursor']
+                    has_more = sync_response['has_more']
+                    
+                    if len(all_plaid_transactions) > 500:
+                        break
+                
+                PLAID_TRANSACTION_CURSORS['default'] = cursor
+                
+                # Transform Plaid data to our format
+                for idx, t in enumerate(all_plaid_transactions):
+                    # Categorize based on description
+                    desc = t.get('merchant_name') or t.get('name', '')
+                    category = categorize_transaction_simple(desc)
+                    
+                    # Plaid uses positive for expenses, negative for income
+                    amount = t['amount']
+                    transformed_transactions.append({
+                        'id': t.get('transaction_id', f'plaid-{idx}'),
+                        'date': t.get('date', ''),
+                        'description': t.get('merchant_name') or t.get('name', 'Unknown Transaction'),
+                        'amount': -amount if amount > 0 else abs(amount),  # Make expenses negative
+                        'category': category,
+                        'status': 'pending' if t.get('pending') else 'executed'
+                    })
+                
+                source = 'plaid'
+                
+            except plaid.ApiException as e:
+                logger.warning(f"Plaid API error: {e}")
+                # Fall through to mock data
             except Exception as e:
-                print(f"Nessie API error: {e}")
+                logger.warning(f"Error getting Plaid data: {e}")
                 # Fall through to mock data
         
-        # Generate realistic mock transactions
-        mock_transactions = generate_realistic_transactions(30, [])
+        # If no Plaid transactions, generate mock data
+        if not transformed_transactions:
+            mock_transactions = generate_realistic_transactions(30, [])
+            for t in mock_transactions:
+                category = categorize_transaction_simple(t.get('description', ''))
+                transformed_transactions.append({
+                    'id': t.get('_id'),
+                    'date': t.get('purchase_date', ''),
+                    'description': t.get('description', 'Unknown Transaction'),
+                    'amount': float(t.get('amount', 0)),
+                    'category': category,
+                    'status': t.get('status', 'executed')
+                })
+            source = 'mock'
         
         # Sort by date (newest first)
-        mock_transactions.sort(key=lambda x: x.get('purchase_date', ''), reverse=True)
+        transformed_transactions.sort(key=lambda x: x['date'], reverse=True)
         
-        # Calculate pagination
+        # Apply pagination
         start_idx = (page - 1) * limit
         end_idx = start_idx + limit
-        paginated_transactions = mock_transactions[start_idx:end_idx]
+        paginated_transactions = transformed_transactions[start_idx:end_idx]
         
         return jsonify({
             'transactions': paginated_transactions,
-            'total_count': len(mock_transactions),
-            'source': 'mock'
+            'total_count': len(transformed_transactions),
+            'source': source
         })
         
     except Exception as e:
@@ -1542,43 +1897,93 @@ def simple_linear_regression(days, amounts):
 
     return slope, intercept
 
-@app.route('/api/nessie/transactions', methods=['POST'])
-def get_nessie_transactions():
+@app.route('/api/plaid/monthly-transactions', methods=['POST'])
+@app.route('/api/nessie/transactions', methods=['POST'])  # Keep old route for backward compatibility
+def get_monthly_transactions():
     try:
         data = request.get_json()
         account_id = data.get('accountId')
         month = data.get('month')
         year = data.get('year')
         
-        if not account_id or not NESSIE_API_KEY:
-            return jsonify({'error': 'Missing accountId or API key'}), 400
-        
-        # Fetch transactions from Nessie
-        url = f"{NESSIE_BASE_URL}/accounts/{account_id}/purchases?key={NESSIE_API_KEY}"
-        response = requests.get(url)
-        
-        if response.status_code != 200:
-            return jsonify({'error': 'Failed to fetch from Nessie'}), 500
-        
-        raw_transactions = response.json()
-        
-        # Normalize transactions
         transactions = []
-        for t in raw_transactions:
-            trans_date = t.get('purchase_date', t.get('transaction_date', ''))
-            trans_month = int(trans_date.split('-')[1]) if trans_date else 0
-            trans_year = int(trans_date.split('-')[0]) if trans_date else 0
+        
+        # Try to get data from Plaid
+        try:
+            access_token = get_or_create_sandbox_token()
             
-            # Filter to requested month
-            if trans_month == month and trans_year == year:
-                transactions.append({
-                    'id': t.get('_id', ''),
-                    'date': trans_date,
-                    'amount': abs(t.get('amount', 0)),
-                    'merchant': t.get('merchant_id', 'Unknown'),
-                    'description': t.get('description', 'Purchase'),
-                    'type': t.get('type', 'debit')
-                })
+            # Get transactions from Plaid
+            cursor = PLAID_TRANSACTION_CURSORS.get('default', '')
+            all_plaid_transactions = []
+            has_more = True
+            
+            while has_more:
+                sync_request = TransactionsSyncRequest(
+                    access_token=access_token,
+                    cursor=cursor if cursor else None
+                )
+                sync_response = plaid_client.transactions_sync(sync_request)
+                
+                for trans in sync_response['added']:
+                    all_plaid_transactions.append(trans)
+                
+                cursor = sync_response['next_cursor']
+                has_more = sync_response['has_more']
+                
+                if len(all_plaid_transactions) > 500:
+                    break
+            
+            PLAID_TRANSACTION_CURSORS['default'] = cursor
+            
+            # Normalize transactions and filter by month/year
+            for t in all_plaid_transactions:
+                trans_date = str(t.get('date', ''))
+                if trans_date:
+                    try:
+                        trans_month = int(trans_date.split('-')[1])
+                        trans_year = int(trans_date.split('-')[0])
+                        
+                        # Filter to requested month (or include all if not specified)
+                        if (not month or trans_month == month) and (not year or trans_year == year):
+                            transactions.append({
+                                'id': t.get('transaction_id', ''),
+                                'date': trans_date,
+                                'amount': abs(t.get('amount', 0)),
+                                'merchant': t.get('merchant_name') or t.get('name', 'Unknown'),
+                                'description': t.get('name', 'Purchase'),
+                                'type': 'credit' if t.get('amount', 0) < 0 else 'debit'
+                            })
+                    except (ValueError, IndexError):
+                        pass
+                        
+        except plaid.ApiException as e:
+            logger.warning(f"Plaid API error, using mock data: {e}")
+            transactions = []
+        except Exception as e:
+            logger.warning(f"Error getting Plaid data: {e}")
+            transactions = []
+        
+        # If no Plaid transactions, generate mock data
+        if not transactions:
+            mock_transactions = generate_realistic_transactions(30, [])
+            for t in mock_transactions:
+                trans_date = t.get('purchase_date', '')
+                if trans_date:
+                    try:
+                        trans_month = int(trans_date.split('-')[1])
+                        trans_year = int(trans_date.split('-')[0])
+                        
+                        if (not month or trans_month == month) and (not year or trans_year == year):
+                            transactions.append({
+                                'id': t.get('_id', ''),
+                                'date': trans_date,
+                                'amount': abs(t.get('amount', 0)),
+                                'merchant': t.get('description', 'Unknown'),
+                                'description': t.get('description', 'Purchase'),
+                                'type': 'credit' if t.get('amount', 0) > 0 else 'debit'
+                            })
+                    except (ValueError, IndexError):
+                        pass
         
         # Detect recurring charges
         fixed_charges = detect_recurring_charges(transactions)
@@ -1588,10 +1993,13 @@ def get_nessie_transactions():
         daily_spend = {}
         
         for t in transactions:
-            day = int(t['date'].split('-')[2])
-            if day <= today:
-                if not t.get('isFixed'):
-                    daily_spend[day] = daily_spend.get(day, 0) + t['amount']
+            try:
+                day = int(t['date'].split('-')[2])
+                if day <= today:
+                    if not t.get('isFixed'):
+                        daily_spend[day] = daily_spend.get(day, 0) + t['amount']
+            except (ValueError, IndexError):
+                pass
         
         # Run regression
         days = sorted(daily_spend.keys())
@@ -1614,6 +2022,7 @@ def get_nessie_transactions():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/gemini/advice', methods=['POST'])
 def get_budget_advice():

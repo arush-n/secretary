@@ -11,9 +11,8 @@ function DashboardView() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const NESSIE_API_KEY = '64dc4e0f8937b26e4e40a7d5fcec7c81'
-  const NESSIE_BASE_URL = 'http://api.nessieisreal.com'
-  const CUSTOMER_ID = '68f3e5a29683f20dd519e4ea'
+  // Backend API URL (Plaid integration is handled by the backend)
+  const BACKEND_URL = 'http://localhost:5001'
 
   useEffect(() => {
     fetchDashboardData()
@@ -24,86 +23,80 @@ function DashboardView() {
       setIsLoading(true)
       setError(null)
 
-      console.log('Fetching from Nessie API...')
+      console.log('Fetching from Plaid via backend API...')
 
-      // Fetch customer accounts
-      const accountsResponse = await fetch(
-        `${NESSIE_BASE_URL}/customers/${CUSTOMER_ID}/accounts?key=${NESSIE_API_KEY}`
-      )
-      
+      // Fetch accounts from backend Plaid endpoint
+      const accountsResponse = await fetch(`${BACKEND_URL}/api/plaid/accounts`)
+
       if (!accountsResponse.ok) {
-        console.warn('Nessie API failed, using mock data')
+        console.warn('Plaid API failed, using mock data')
         const mockData = generateMockData()
         setDashboardData(mockData.dashboardData)
         setAiSummary(mockData.aiSummary)
         setIsLoading(false)
         return
       }
-      
-      const accountsData = await accountsResponse.json()
+
+      const accountsResult = await accountsResponse.json()
+      const accountsData = accountsResult.accounts || []
       console.log('Accounts fetched:', accountsData)
 
-      // Fetch all transactions
-      let allPurchases = []
-      let allDeposits = []
-      
-      for (const account of accountsData) {
-        // Fetch purchases
-        try {
-          const purchasesResponse = await fetch(
-            `${NESSIE_BASE_URL}/accounts/${account._id}/purchases?key=${NESSIE_API_KEY}`
-          )
-          
-          if (purchasesResponse.ok) {
-            const purchases = await purchasesResponse.json()
-            console.log(`Purchases for account ${account._id}:`, purchases)
-            
-            if (Array.isArray(purchases)) {
-              allPurchases = [...allPurchases, ...purchases.map(p => ({
-                ...p,
-                account_id: account._id,
-                type: 'debit'
-              }))]
-            }
-          }
-        } catch (e) {
-          console.warn('Failed to fetch purchases:', e)
-        }
+      // Fetch transactions from backend Plaid endpoint
+      const transactionsResponse = await fetch(`${BACKEND_URL}/api/plaid/transactions`)
 
-        // Fetch deposits
-        try {
-          const depositsResponse = await fetch(
-            `${NESSIE_BASE_URL}/accounts/${account._id}/deposits?key=${NESSIE_API_KEY}`
-          )
-          
-          if (depositsResponse.ok) {
-            const deposits = await depositsResponse.json()
-            console.log(`Deposits for account ${account._id}:`, deposits)
-            
-            if (Array.isArray(deposits)) {
-              allDeposits = [...allDeposits, ...deposits.map(d => ({
-                ...d,
-                account_id: account._id,
-                type: 'credit'
-              }))]
-            }
-          }
-        } catch (e) {
-          console.warn('Failed to fetch deposits:', e)
-        }
+      let allTransactions = []
+      if (transactionsResponse.ok) {
+        const transactionsResult = await transactionsResponse.json()
+        allTransactions = transactionsResult.transactions || []
+        console.log('Transactions fetched:', allTransactions.length)
       }
+
+      // Separate purchases and deposits based on amount sign
+      // Plaid: positive = expense (debit), negative = income (credit)
+      const allPurchases = allTransactions
+        .filter(t => t.amount > 0)
+        .map(t => ({
+          _id: t.transaction_id,
+          purchase_date: t.date,
+          amount: t.amount,
+          description: t.merchant_name || t.name,
+          merchant_id: t.merchant_name,
+          account_id: t.account_id,
+          type: 'debit'
+        }))
+
+      const allDeposits = allTransactions
+        .filter(t => t.amount < 0)
+        .map(t => ({
+          _id: t.transaction_id,
+          transaction_date: t.date,
+          amount: Math.abs(t.amount),
+          description: t.merchant_name || t.name,
+          account_id: t.account_id,
+          type: 'credit'
+        }))
 
       console.log('Total purchases:', allPurchases.length)
       console.log('Total deposits:', allDeposits.length)
 
+      // Transform Plaid accounts to expected format
+      const transformedAccounts = accountsData.map(acc => ({
+        _id: acc.account_id,
+        type: acc.type === 'depository'
+          ? (acc.subtype === 'checking' ? 'Checking' : 'Savings')
+          : acc.type === 'credit' ? 'Credit Card' : acc.type,
+        balance: acc.balance?.current || 0,
+        nickname: acc.name
+      }))
+
       // Process the data
-      const processedData = processNessieData(accountsData, allPurchases, allDeposits)
+      const processedData = processPlaidData(transformedAccounts, allPurchases, allDeposits)
       setDashboardData(processedData.dashboardData)
       setAiSummary(processedData.aiSummary)
-      
+
     } catch (err) {
       console.error('Error in fetchDashboardData:', err)
-      
+
       // Fall back to mock data
       const mockData = generateMockData()
       setDashboardData(mockData.dashboardData)
@@ -113,13 +106,13 @@ function DashboardView() {
     }
   }
 
-  const processNessieData = (accounts, purchases, deposits) => {
+  const processPlaidData = (accounts, purchases, deposits) => {
     const now = new Date()
     const currentMonth = now.getMonth()
     const currentYear = now.getFullYear()
     const today = now.getDate()
 
-    console.log('Processing Nessie data...')
+    console.log('Processing Plaid data...')
 
     // Format purchases as transactions
     const purchaseTransactions = purchases.map(p => ({
@@ -144,7 +137,7 @@ function DashboardView() {
     }))
 
     let allTransactions = [...purchaseTransactions, ...depositTransactions]
-    
+
     console.log('Formatted transactions:', allTransactions.length)
 
     // If no real transactions, generate mock data
@@ -171,7 +164,7 @@ function DashboardView() {
         const transDate = new Date(t.date)
         return transDate.getDate() === day && t.type === 'debit'
       })
-      
+
       const dayTotal = dayTransactions.reduce((sum, t) => sum + t.amount, 0)
       dailySpending.push({ day, amount: dayTotal })
     }
@@ -188,10 +181,10 @@ function DashboardView() {
     let checkingBalance = 0
     let savingsBalance = 0
     let creditCardBalance = 0
-    
+
     accounts.forEach(account => {
       const balance = account.balance || 0
-      
+
       if (account.type === 'Checking') {
         checkingBalance += balance
       } else if (account.type === 'Savings') {
@@ -232,30 +225,30 @@ function DashboardView() {
 
     // Calculate daily net worth changes
     const dailyNetWorthData = []
-    
+
     // Start with initial net worth (before this month's transactions)
     let initialNetWorth = totalAssets - totalLiabilities + totalSpending - totalIncome
     let runningNetWorth = initialNetWorth
-    
+
     for (let day = 1; day <= today; day++) {
       // Get transactions for this day
       const dayTransactions = currentMonthTransactions.filter(t => {
         const transDate = new Date(t.date)
         return transDate.getDate() === day
       })
-      
+
       // Calculate income and spending for the day
       const dayIncome = dayTransactions
         .filter(t => t.type === 'credit')
         .reduce((sum, t) => sum + t.amount, 0)
-      
+
       const daySpending = dayTransactions
         .filter(t => t.type === 'debit')
         .reduce((sum, t) => sum + t.amount, 0)
-      
+
       // Update net worth (income increases it, spending decreases it)
       runningNetWorth = runningNetWorth + dayIncome - daySpending
-      
+
       dailyNetWorthData.push({
         day: day,
         netWorth: runningNetWorth,
@@ -282,7 +275,7 @@ function DashboardView() {
 
   const determineCategory = (description) => {
     const desc = description.toLowerCase()
-    
+
     if (desc.includes('starbucks') || desc.includes('coffee') || desc.includes('restaurant') || desc.includes('food')) {
       return 'Food'
     }
@@ -298,7 +291,7 @@ function DashboardView() {
     if (desc.includes('movie') || desc.includes('netflix') || desc.includes('entertainment')) {
       return 'Entertainment'
     }
-    
+
     return 'Other'
   }
 
@@ -307,9 +300,9 @@ function DashboardView() {
     const currentMonth = now.getMonth()
     const currentYear = now.getFullYear()
     const today = now.getDate()
-    
+
     console.log('Generating mock data...')
-    
+
     const transactions = []
     const dailySpending = []
 
@@ -317,11 +310,11 @@ function DashboardView() {
     for (let day = 1; day <= today; day++) {
       const numTransactions = Math.floor(Math.random() * 3) + 1
       let dayTotal = 0
-      
+
       for (let i = 0; i < numTransactions; i++) {
         const amount = Math.random() * 99 + 1
         dayTotal += amount
-        
+
         transactions.push({
           id: `trans-${day}-${i}`,
           date: `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
@@ -332,7 +325,7 @@ function DashboardView() {
           type: 'debit'
         })
       }
-      
+
       dailySpending.push({ day: day, amount: dayTotal })
     }
 
@@ -355,7 +348,7 @@ function DashboardView() {
           type: 'debit',
           isFixed: true
         })
-        
+
         const existingDay = dailySpending.find(d => d.day === charge.day)
         if (existingDay) {
           existingDay.amount += charge.amount
@@ -375,7 +368,7 @@ function DashboardView() {
         type: 'credit'
       })
     }
-    
+
     if (today >= 15) {
       transactions.push({
         id: 'income-2',
@@ -423,30 +416,30 @@ function DashboardView() {
 
     // Calculate daily net worth changes
     const dailyNetWorthData = []
-    
+
     // Start with initial net worth (before this month's transactions)
     const initialNetWorth = (checkingBalance + savingsBalance - creditCardBalance) + totalSpending - totalIncome
     let runningNetWorth = initialNetWorth
-    
+
     for (let day = 1; day <= today; day++) {
       // Get transactions for this day
       const dayTransactions = transactions.filter(t => {
         const transDate = new Date(t.date)
         return transDate.getDate() === day
       })
-      
+
       // Calculate income and spending for the day
       const dayIncome = dayTransactions
         .filter(t => t.type === 'credit')
         .reduce((sum, t) => sum + t.amount, 0)
-      
+
       const daySpending = dayTransactions
         .filter(t => t.type === 'debit')
         .reduce((sum, t) => sum + t.amount, 0)
-      
+
       // Update net worth (income increases it, spending decreases it)
       runningNetWorth = runningNetWorth + dayIncome - daySpending
-      
+
       dailyNetWorthData.push({
         day: day,
         netWorth: runningNetWorth,
@@ -470,25 +463,23 @@ function DashboardView() {
   }
 
   const generateAISummary = (totalSpending, monthlyBudget, netWorth, transactions, remaining) => {
-    const spendingTrend = totalSpending < monthlyBudget * 0.5 ? 'under control' : 
-                          totalSpending > monthlyBudget * 0.8 ? 'running high' : 'on track'
-    
+    const spendingTrend = totalSpending < monthlyBudget * 0.5 ? 'under control' :
+      totalSpending > monthlyBudget * 0.8 ? 'running high' : 'on track'
+
     const topCategories = transactions
       .filter(t => t.type === 'debit' && !t.isFixed)
       .reduce((acc, t) => {
         acc[t.category] = (acc[t.category] || 0) + t.amount
         return acc
       }, {})
-    
+
     const topCategory = Object.entries(topCategories).sort((a, b) => b[1] - a[1])[0]
 
-    return `Your spending is ${spendingTrend} this month. You've spent $${totalSpending.toFixed(0)} of your $${monthlyBudget.toFixed(0)} budget. ${
-      topCategory ? `Your highest spending category is ${topCategory[0]} at $${topCategory[1].toFixed(0)}.` : ''
-    } Your net worth is $${netWorth.toLocaleString()}. ${
-      remaining > 0 
+    return `Your spending is ${spendingTrend} this month. You've spent $${totalSpending.toFixed(0)} of your $${monthlyBudget.toFixed(0)} budget. ${topCategory ? `Your highest spending category is ${topCategory[0]} at $${topCategory[1].toFixed(0)}.` : ''
+      } Your net worth is $${netWorth.toLocaleString()}. ${remaining > 0
         ? `You have $${remaining.toFixed(0)} remaining for the month.`
         : `You're projected to exceed your budget by $${Math.abs(remaining).toFixed(0)}.`
-    }`
+      }`
   }
 
   if (isLoading) {
@@ -508,8 +499,8 @@ function DashboardView() {
         <div className="text-center">
           <div className="text-red-400 text-xl mb-4">⚠️ error</div>
           <p className="text-gray-400">{error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
+          <button
+            onClick={() => window.location.reload()}
             className="mt-4 px-4 py-2 bg-white text-black rounded hover:bg-gray-200"
           >
             retry
@@ -542,14 +533,14 @@ function DashboardView() {
           </div>
         </div>
       </div>
-      
+
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto p-8 pt-6">
 
         {/* Net Worth Section */}
         <div className="mb-8">
-          <NetWorthCard 
-            netWorth={dashboardData.net_worth} 
+          <NetWorthCard
+            netWorth={dashboardData.net_worth}
             dailyData={dashboardData.daily_asset_data || []}
           />
         </div>
@@ -560,7 +551,7 @@ function DashboardView() {
           <div className="lg:col-span-1">
             <BudgetOverview budget={dashboardData.budget} />
           </div>
-          
+
           {/* Assets & Liabilities */}
           <div className="lg:col-span-2">
             <AssetsLiabilities assetsLiabilities={dashboardData.assets_liabilities} />
