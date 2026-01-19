@@ -53,3 +53,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Database
+*.db
+
+# ChromaDB
+chroma_db/

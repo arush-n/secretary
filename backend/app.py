@@ -35,6 +35,29 @@ except ImportError:
     INVESTMENT_FEATURES_AVAILABLE = False
     print("Warning: Investment modules not available. Stock advisor features will be disabled.")
 
+# Import RAG service for grounded AI responses
+try:
+    from rag_service import (
+        get_rag_service, RAGService, classify_financial_query, 
+        format_temporal_filter_human, embed_conversation_message,
+        retrieve_conversation_context, format_time_ago,
+        classify_query_intent_with_llm, classify_query_unified_llm
+    )
+    RAG_AVAILABLE = True
+except ImportError:
+    RAG_AVAILABLE = False
+    print("Warning: RAG service not available. AI responses will not be grounded in user data.")
+    def classify_financial_query(q): return {'intent': 'general', 'requires_structured': False, 'filters': {}}
+
+# Import user profile service
+try:
+    from user_profile import get_profile_service, UserProfileService
+    PROFILE_AVAILABLE = True
+except ImportError:
+    PROFILE_AVAILABLE = False
+    print("Warning: User profile service not available.")
+
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,6 +67,138 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+# ========== Chat History Database ==========
+import sqlite3
+import uuid
+
+DB_PATH = os.path.join(os.path.dirname(__file__), 'secretary.db')
+
+def initialize_database():
+    """Create conversations, messages, and user profile tables"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS conversations (
+            id TEXT PRIMARY KEY,
+            user_id TEXT DEFAULT 'default_user',
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            title TEXT,
+            message_count INTEGER DEFAULT 0
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS messages (
+            id TEXT PRIMARY KEY,
+            conversation_id TEXT,
+            role TEXT,
+            content TEXT,
+            timestamp TIMESTAMP,
+            metadata TEXT,
+            FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_conversation_messages 
+        ON messages(conversation_id, timestamp)
+    ''')
+    
+    # ========== User Profile Tables ==========
+    
+    # Core user profile
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_profiles (
+            id TEXT PRIMARY KEY,
+            email TEXT UNIQUE,
+            name TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            onboarding_completed BOOLEAN DEFAULT FALSE
+        )
+    ''')
+    
+    # Demographic attributes
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_demographics (
+            user_id TEXT PRIMARY KEY,
+            age INTEGER,
+            age_range TEXT,
+            income_range TEXT,
+            employment_status TEXT,
+            occupation TEXT,
+            household_size INTEGER,
+            location_state TEXT,
+            location_city TEXT,
+            FOREIGN KEY (user_id) REFERENCES user_profiles (id)
+        )
+    ''')
+    
+    # Financial attributes
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_financials (
+            user_id TEXT PRIMARY KEY,
+            primary_goal TEXT,
+            secondary_goals TEXT,
+            target_savings_rate REAL,
+            monthly_income REAL,
+            monthly_expenses REAL,
+            total_debt REAL,
+            debt_types TEXT,
+            emergency_fund_months REAL,
+            investment_experience TEXT,
+            risk_tolerance TEXT,
+            retirement_accounts TEXT,
+            FOREIGN KEY (user_id) REFERENCES user_profiles (id)
+        )
+    ''')
+    
+    # Behavioral attributes (auto-tracked)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_behaviors (
+            user_id TEXT PRIMARY KEY,
+            avg_monthly_spending REAL,
+            top_spending_categories TEXT,
+            frequent_merchants TEXT,
+            spending_trend TEXT,
+            last_active TIMESTAMP,
+            chat_count INTEGER DEFAULT 0,
+            preferred_advice_style TEXT,
+            impulse_buyer_score REAL,
+            budget_adherence_score REAL,
+            savings_consistency_score REAL,
+            FOREIGN KEY (user_id) REFERENCES user_profiles (id)
+        )
+    ''')
+    
+    # User preferences
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_preferences (
+            user_id TEXT PRIMARY KEY,
+            notification_enabled BOOLEAN DEFAULT TRUE,
+            weekly_summary_enabled BOOLEAN DEFAULT TRUE,
+            advice_tone TEXT DEFAULT 'friendly',
+            currency TEXT DEFAULT 'USD',
+            FOREIGN KEY (user_id) REFERENCES user_profiles (id)
+        )
+    ''')
+    
+    # Create default user if not exists
+    cursor.execute('''
+        INSERT OR IGNORE INTO user_profiles (id, name, email, onboarding_completed)
+        VALUES ('default_user', 'User', 'user@example.com', FALSE)
+    ''')
+    
+    conn.commit()
+    conn.close()
+    logger.info("Database initialized successfully")
+
+# Initialize database on startup
+initialize_database()
+# ========== End Chat History Database ==========
 
 # Request logging middleware
 @app.before_request
@@ -154,6 +309,12 @@ TAGS = [
 
 # In-memory storage for transaction updates (in production, use a database)
 TRANSACTION_UPDATES = {}
+
+# In-memory cache for generated transactions (persists across requests)
+CACHED_TRANSACTIONS = {
+    'data': None,
+    'generated_for_days': None
+}
 
 @app.route('/get-categories', methods=['GET'])
 def get_categories():
@@ -1067,11 +1228,32 @@ def get_all_transactions():
 
 
 def generate_realistic_transactions(days, accounts):
-    """Generate realistic transaction data for demonstration"""
+    """Generate realistic transaction data for demonstration.
+    
+    Results are cached so the same transactions appear on each request.
+    """
+    global CACHED_TRANSACTIONS
     import random
+    
+    # Check if we have cached transactions that cover the requested period
+    if (CACHED_TRANSACTIONS['data'] is not None and 
+        CACHED_TRANSACTIONS['generated_for_days'] is not None and
+        CACHED_TRANSACTIONS['generated_for_days'] >= days):
+        # Filter cached transactions to the requested date range
+        cutoff_date = datetime.now() - timedelta(days=days)
+        return [
+            t for t in CACHED_TRANSACTIONS['data']
+            if datetime.strptime(t['purchase_date'], '%Y-%m-%d') >= cutoff_date
+        ]
+    
+    # Generate new transactions with a fixed seed for reproducibility
+    random.seed(42)  # Fixed seed ensures same transactions every time
     
     transactions = []
     today = datetime.now()
+    
+    # Always generate for a full year to cover all date range requests
+    generation_days = max(days, 365)
     
     # Common merchants and categories
     merchants = [
@@ -1106,7 +1288,7 @@ def generate_realistic_transactions(days, accounts):
     account = accounts[0] if accounts else {'_id': 'demo_account', 'type': 'Checking', 'nickname': 'Main Account'}
     
     # Generate transactions over the time period
-    for day in range(days):
+    for day in range(generation_days):
         date = (today - timedelta(days=day)).strftime('%Y-%m-%d')
         
         # Add 2-5 transactions per day
@@ -1141,7 +1323,18 @@ def generate_realistic_transactions(days, accounts):
                 'category': 'Income'
             })
     
-    return transactions
+    # Cache the generated transactions
+    CACHED_TRANSACTIONS['data'] = transactions
+    CACHED_TRANSACTIONS['generated_for_days'] = generation_days
+    
+    logger.info(f"Generated and cached {len(transactions)} transactions for {generation_days} days")
+    
+    # Filter to requested date range
+    cutoff_date = datetime.now() - timedelta(days=days)
+    return [
+        t for t in transactions
+        if datetime.strptime(t['purchase_date'], '%Y-%m-%d') >= cutoff_date
+    ]
 
 # ========== Recurring Expenses Endpoint ==========
 @app.route('/get-recurring-expenses', methods=['GET'])
@@ -2425,6 +2618,1911 @@ def get_transaction_insight():
     except Exception as e:
         logger.error(f"Error in transaction insight: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+# ========== LLM-Powered Semantic Transaction Matching ==========
+
+def filter_transactions_with_llm(query: str, transactions: list, temporal_filtered: list = None) -> dict:
+    """
+    Use Gemini's world knowledge to semantically filter transactions.
+    
+    Instead of hardcoding "coffee shop" = ["starbucks", ...], this asks the LLM
+    to use its real-world understanding to identify which merchants match the query.
+    
+    Args:
+        query: User's query (e.g., "What coffee shops have I bought from?")
+        transactions: List of all transactions or temporally-filtered transactions
+        temporal_filtered: If provided, already filtered by time period
+    
+    Returns:
+        {
+            'matching_transactions': [...],
+            'matching_merchants': [...],
+            'reasoning': str
+        }
+    """
+    try:
+        # Use temporally-filtered if provided, otherwise use all
+        txns_to_analyze = temporal_filtered if temporal_filtered else transactions
+        
+        if not txns_to_analyze:
+            return {'matching_transactions': [], 'matching_merchants': [], 'reasoning': 'No transactions to analyze'}
+        
+        # Get unique merchant descriptions
+        unique_merchants = list(set(t.get('description', '') for t in txns_to_analyze if t.get('description')))
+        
+        if not unique_merchants:
+            return {'matching_transactions': [], 'matching_merchants': [], 'reasoning': 'No merchants found'}
+        
+        # Limit to reasonable number for LLM context
+        if len(unique_merchants) > 50:
+            unique_merchants = unique_merchants[:50]
+        
+        merchant_list = "\n".join([f"- {m}" for m in unique_merchants])
+        
+        prompt = f"""You are an expert at understanding businesses and merchants.
+
+USER QUERY: "{query}"
+
+MERCHANT LIST FROM USER'S TRANSACTIONS:
+{merchant_list}
+
+TASK: Using your real-world knowledge, identify which merchants from the list match what the user is asking about.
+
+For example:
+- If user asks about "coffee shops", identify merchants like "Starbucks Coffee", "Dunkin", "Peet's Coffee"
+- If user asks about "fast food", identify "McDonald's", "Chipotle", "Taco Bell"
+- If user asks about "streaming services", identify "Netflix", "Spotify", "Hulu"
+
+Respond with ONLY a JSON object (no markdown):
+{{
+  "matching_merchants": ["list of merchant names that match"],
+  "reasoning": "brief explanation of why these match"
+}}
+
+If NO merchants match the query, return:
+{{
+  "matching_merchants": [],
+  "reasoning": "None of the merchants match [what user asked for]"
+}}
+
+JSON response:"""
+
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                'temperature': 0.1,
+                'max_output_tokens': 500
+            }
+        )
+        
+        response_text = response.text.strip()
+        logger.info(f"LLM filter raw response: {response_text[:200]}")
+        
+        # Clean markdown if present
+        if '```' in response_text:
+            # Extract JSON from markdown code block
+            import re
+            json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', response_text)
+            if json_match:
+                response_text = json_match.group(1).strip()
+        
+        # Try to extract JSON object if there's extra text
+        if not response_text.startswith('{'):
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                response_text = json_match.group(0)
+        
+        result = json.loads(response_text.strip())
+        matching_merchants = result.get('matching_merchants', [])
+        reasoning = result.get('reasoning', '')
+        
+        # Filter transactions to those matching the identified merchants
+        matching_transactions = []
+        for t in txns_to_analyze:
+            desc = t.get('description', '').lower()
+            for merchant in matching_merchants:
+                if merchant.lower() in desc or desc in merchant.lower():
+                    matching_transactions.append(t)
+                    break
+        
+        logger.info(f"LLM identified {len(matching_merchants)} matching merchants: {matching_merchants}")
+        
+        return {
+            'matching_transactions': matching_transactions,
+            'matching_merchants': matching_merchants,
+            'reasoning': reasoning
+        }
+        
+    except Exception as e:
+        logger.warning(f"LLM transaction filter failed: {e}")
+        # Fallback: Try to find common coffee shop patterns directly
+        if 'coffee' in query.lower():
+            fallback_matches = []
+            for t in txns_to_analyze:
+                desc = t.get('description', '').lower()
+                if any(kw in desc for kw in ['starbucks', 'coffee', 'cafe', 'dunkin', 'peets', 'espresso']):
+                    fallback_matches.append(t)
+            if fallback_matches:
+                return {
+                    'matching_transactions': fallback_matches,
+                    'matching_merchants': list(set(t.get('description', '') for t in fallback_matches)),
+                    'reasoning': 'Fallback pattern matching for coffee-related merchants'
+                }
+        return {
+            'matching_transactions': [],
+            'matching_merchants': [],
+            'reasoning': f'LLM filter failed: {str(e)}'
+        }
+
+
+# ========== Structured Query Engine for Hybrid RAG ==========
+
+def execute_structured_query(classification: dict, all_transactions: list) -> dict:
+    """
+    Execute precise data operations on the full transaction dataset.
+    
+    This ensures 100% accuracy for MAX, MIN, SUM, AVG, COUNT operations
+    by examining ALL matching transactions, not just vector search samples.
+    
+    Returns:
+        {
+            'result': computed value or transaction,
+            'filtered_transactions': list of matching transactions,
+            'verification': str describing what was checked
+        }
+    """
+    intent = classification['intent']
+    filters = classification.get('filters', {})
+    
+    # Start with all transactions
+    filtered = all_transactions.copy() if all_transactions else []
+    
+    # Apply temporal filter
+    temporal = filters.get('temporal')
+    if temporal:
+        if 'date' in temporal:
+            # Exact date match
+            target_date = temporal['date']
+            filtered = [t for t in filtered if t.get('purchase_date') == target_date]
+        elif 'month' in temporal and 'year' in temporal:
+            # Month/year filter
+            target_month = temporal['month']
+            target_year = temporal['year']
+            filtered = [t for t in filtered if _matches_month_year(t.get('purchase_date', ''), target_month, target_year)]
+        elif 'start_date' in temporal:
+            # Date range filter
+            start = temporal['start_date']
+            end = temporal.get('end_date')  # Optional end date
+            filtered = [t for t in filtered if t.get('purchase_date', '') >= start]
+            if end:
+                filtered = [t for t in filtered if t.get('purchase_date', '') <= end]
+    
+    # Apply merchant filter
+    merchants = filters.get('merchants', [])
+    if merchants:
+        filtered = [t for t in filtered 
+                   if any(m.lower() in t.get('description', '').lower() for m in merchants)]
+    
+    # Apply category filter
+    categories = filters.get('categories', [])
+    if categories:
+        filtered = [t for t in filtered 
+                   if any(c.lower() in t.get('category', '').lower() for c in categories)]
+    
+    # Only consider expenses (negative amounts in our data model)
+    expenses_only = [t for t in filtered if float(t.get('amount', 0)) < 0]
+    
+    result = {
+        'result': None,
+        'filtered_transactions': filtered,
+        'expenses': expenses_only,
+        'verification': f"Checked {len(filtered)} matching transactions",
+        'intent': intent
+    }
+    
+    if not expenses_only and intent in ['find_maximum', 'find_minimum', 'calculate_total', 'calculate_average']:
+        # No expenses found, use all filtered for informational queries
+        expenses_only = filtered
+    
+    if not expenses_only:
+        result['verification'] = "No matching transactions found"
+        return result
+    
+    # Execute the operation
+    if intent == 'find_maximum':
+        # Find largest expense (most negative = biggest spend)
+        max_txn = min(expenses_only, key=lambda x: float(x.get('amount', 0)))
+        result['result'] = max_txn
+        result['verification'] = f"✓ Found maximum from {len(expenses_only)} expenses"
+        # Also include top 5 for context
+        sorted_txns = sorted(expenses_only, key=lambda x: float(x.get('amount', 0)))
+        result['top_5'] = sorted_txns[:5]
+        
+    elif intent == 'find_minimum':
+        # Find smallest expense (least negative = smallest spend)
+        min_txn = max(expenses_only, key=lambda x: float(x.get('amount', 0)))
+        result['result'] = min_txn
+        result['verification'] = f"✓ Found minimum from {len(expenses_only)} expenses"
+        
+    elif intent == 'calculate_total':
+        total = sum(abs(float(t.get('amount', 0))) for t in expenses_only)
+        result['result'] = {'total': total, 'count': len(expenses_only)}
+        result['verification'] = f"✓ Summed {len(expenses_only)} transactions = ${total:.2f}"
+        
+    elif intent == 'calculate_average':
+        if expenses_only:
+            total = sum(abs(float(t.get('amount', 0))) for t in expenses_only)
+            avg = total / len(expenses_only)
+            result['result'] = {'average': avg, 'count': len(expenses_only), 'total': total}
+            result['verification'] = f"✓ Average of {len(expenses_only)} transactions = ${avg:.2f}"
+        
+    elif intent == 'count':
+        result['result'] = {'count': len(filtered)}
+        result['verification'] = f"✓ Found {len(filtered)} matching transactions"
+    
+    elif intent == 'find_recent':
+        # Sort ALL transactions by date (most recent first) and return limit
+        limit = filters.get('limit', 5)
+        # Sort by purchase_date descending
+        sorted_txns = sorted(filtered, key=lambda x: x.get('purchase_date', ''), reverse=True)
+        recent_txns = sorted_txns[:limit]
+        result['result'] = {'transactions': recent_txns, 'count': len(recent_txns)}
+        result['verification'] = f"✓ Found {len(recent_txns)} most recent transactions"
+        result['recent_transactions'] = recent_txns
+    
+    return result
+
+
+def _matches_month_year(date_str: str, month: int, year: int) -> bool:
+    """Check if a date string matches the given month and year."""
+    try:
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        return date_obj.month == month and date_obj.year == year
+    except (ValueError, TypeError):
+        return False
+
+
+# ========== RAG-Enhanced Chat Endpoints ==========
+
+@app.route('/api/chat', methods=['POST'])
+def chat_with_rag():
+    """
+    RAG-enhanced chat endpoint.
+    
+    Supports testing_mode to compare RAG vs non-RAG responses.
+    """
+    try:
+        data = request.get_json()
+        user_query = data.get('message', '')
+        testing_mode = data.get('testing_mode', False)
+        conversation_id = data.get('conversation_id')  # For context memory
+        
+        if not user_query:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        # Initialize Gemini model
+        model = None
+        try:
+            model = genai.GenerativeModel('gemini-2.5-flash')
+        except Exception as e:
+            logger.warning(f'Gemini model initialization failed, trying fallback: {e}')
+            try:
+                model = genai.GenerativeModel('gemini-1.5-flash')
+            except Exception as e2:
+                logger.warning(f'Fallback model also failed: {e2}')
+        
+        if not model:
+            return jsonify({
+                'error': 'AI service temporarily unavailable',
+                'response': 'I apologize, but the AI service is currently unavailable. Please try again later.'
+            }), 503
+        
+        # Get RAG service
+        rag_svc = None
+        context = None
+        if RAG_AVAILABLE:
+            try:
+                rag_svc = get_rag_service()
+                if rag_svc and rag_svc.enabled:
+                    context = rag_svc.retrieve_context(user_query)
+            except Exception as e:
+                logger.warning(f'RAG service error: {e}')
+        
+        # Get conversation context - prefer message_history from frontend (immediate)
+        # Fall back to ChromaDB retrieval (may be delayed)
+        conversation_context = {'current_conversation': []}
+        
+        # Use message_history from frontend if provided (more reliable)
+        message_history = data.get('message_history', [])
+        if message_history:
+            # Convert frontend messages to context format
+            for msg in message_history[-6:]:  # Last 6 messages (3 turns)
+                conversation_context['current_conversation'].append({
+                    'text': f"{msg.get('role', 'user')}: {msg.get('content', '')}",
+                    'timestamp': msg.get('timestamp', ''),
+                    'role': msg.get('role', 'user')
+                })
+            logger.info(f"Using {len(message_history)} messages from frontend for context")
+        elif RAG_AVAILABLE and conversation_id:
+            # Fall back to ChromaDB retrieval
+            try:
+                rag_svc = get_rag_service()
+                conversation_context = retrieve_conversation_context(
+                    rag_svc, user_query, conversation_id, n_results=5
+                )
+            except Exception as e:
+                logger.warning(f'Conversation context error: {e}')
+        
+        # Resolve referential queries (they, it, that, there) using conversation context
+        resolved_query = user_query
+        referential_words = ['they', 'it', 'that', 'this', 'those', 'these', 'there', 'here']
+        query_lower = user_query.lower()
+        
+        if any(word in query_lower.split() for word in referential_words):
+            # Extract potential entity from recent conversation
+            recent_texts = [ctx.get('text', '') for ctx in conversation_context.get('current_conversation', [])]
+            for text in recent_texts:
+                # Look for merchant/entity names in previous messages
+                import re
+                # Common patterns: "was X for $", "at X", "from X"
+                patterns = [
+                    r'was\s+([A-Z][A-Za-z\s\']+?)\s+for\s+\$',  # "was Starbucks Coffee for $"
+                    r'at\s+([A-Z][A-Za-z\s\']+?)[\.\,\s]',     # "at Starbucks"
+                    r'from\s+([A-Z][A-Za-z\s\']+?)[\.\,\s]',   # "from Amazon"
+                    r'purchase\s+(?:at|from)?\s*([A-Z][A-Za-z\s\']+?)[\.\,\s]',
+                ]
+                for pattern in patterns:
+                    match = re.search(pattern, text)
+                    if match:
+                        entity = match.group(1).strip()
+                        if len(entity) > 2:  # Valid entity name
+                            # Rewrite query with explicit entity
+                            for word in referential_words:
+                                if word in query_lower:
+                                    resolved_query = re.sub(
+                                        rf'\b{word}\b', entity, user_query, flags=re.IGNORECASE
+                                    )
+                                    logger.info(f"Resolved '{user_query}' -> '{resolved_query}'")
+                                    break
+                            break
+                if resolved_query != user_query:
+                    break
+        
+        # Re-fetch RAG context with resolved query if it was modified
+        if resolved_query != user_query and RAG_AVAILABLE and rag_svc:
+            try:
+                logger.info(f"Re-fetching RAG context for resolved query: {resolved_query}")
+                context = rag_svc.retrieve_context(resolved_query)
+            except Exception as e:
+                logger.warning(f'RAG re-fetch error: {e}')
+        
+        if testing_mode:
+            # Generate BOTH responses for comparison
+            
+            # 1. Original response (no RAG)
+            original_prompt = f"""You are a helpful financial advisor. Answer the following question:
+
+USER QUESTION: {user_query}
+
+Provide helpful financial advice."""
+            
+            try:
+                original_response = model.generate_content(original_prompt)
+                original_text = original_response.text
+            except Exception as e:
+                logger.error(f"Original response generation failed: {e}")
+                original_text = "Failed to generate original response."
+            
+            # 2. RAG-enhanced response
+            rag_text = "RAG not available"
+            if rag_svc and rag_svc.enabled and context:
+                rag_prompt = rag_svc.build_grounded_prompt(user_query, context)
+                try:
+                    rag_response = model.generate_content(rag_prompt)
+                    rag_text = rag_response.text
+                except Exception as e:
+                    logger.error(f"RAG response generation failed: {e}")
+                    rag_text = "Failed to generate RAG response."
+            
+            # Format context for display
+            context_summary = {
+                'transactions_count': len(context.get('transactions', [])) if context else 0,
+                'patterns_count': len(context.get('spending_patterns', [])) if context else 0,
+                'goals_count': len(context.get('user_goals', [])) if context else 0,
+                'sample_data': []
+            }
+            
+            if context and context.get('transactions'):
+                context_summary['sample_data'] = [t['text'] for t in context['transactions'][:5]]
+            
+            return jsonify({
+                'original': original_text,
+                'rag': rag_text,
+                'context_used': context_summary,
+                'testing_mode': True
+            })
+        
+        else:
+            # ===== HYBRID RAG: Unified LLM Classification =====
+            
+            # Build conversation history for context-aware classification
+            conv_history_for_llm = []
+            if conversation_context and conversation_context.get('current_conversation'):
+                for ctx in conversation_context['current_conversation'][:3]:
+                    conv_history_for_llm.append({
+                        'role': ctx.get('role', 'user'),
+                        'content': ctx.get('text', '')
+                    })
+            
+            # Single unified LLM call for all classification (structured intent + filters + context needs)
+            classification = classify_financial_query(user_query, conv_history_for_llm, use_llm=True)
+            logger.info(f"Unified Classification: intent={classification.get('intent')}, "
+                       f"structured={classification.get('requires_structured')}, "
+                       f"broad_intent={classification.get('broad_intent')}, "
+                       f"llm_classified={classification.get('llm_classified', False)}")
+            
+            # Extract LLM classification info for response (backward compatible)
+            llm_classification = {
+                'intent': classification.get('broad_intent', 'hybrid'),
+                'needs_transaction_data': classification.get('needs_transaction_data', True),
+                'needs_general_knowledge': classification.get('needs_general_knowledge', False),
+                'reasoning': classification.get('reasoning', ''),
+                'entities': classification.get('entities', {})
+            }
+            
+            structured_result = None
+            verification = None
+            method_used = 'semantic_search'
+            
+            # Decide processing path based on unified classification
+            needs_structured = classification.get('requires_structured', False)
+            intent = classification.get('intent', 'general')
+            
+            # PATH 1.5: Semantic list queries (e.g., "What coffee shops have I bought from?")
+            # Use LLM's world knowledge to identify matching merchants
+            if intent == 'list' or (classification.get('broad_intent') == 'financial' and not needs_structured):
+                # Check if this seems like a "what [type of business] have I..." query
+                query_lower = user_query.lower()
+                semantic_list_triggers = ['what', 'which', 'show me', 'list', 'where have i', 'have i bought']
+                
+                if any(trigger in query_lower for trigger in semantic_list_triggers):
+                    method_used = 'semantic_llm_filter'
+                    
+                    # Get transactions (apply temporal filter first if specified)
+                    all_transactions = CACHED_TRANSACTIONS.get('data', [])
+                    if not all_transactions:
+                        all_transactions = generate_realistic_transactions(365, [])
+                    
+                    # Apply temporal filter if present
+                    temporal = classification.get('filters', {}).get('temporal')
+                    temporal_filtered = all_transactions
+                    if temporal:
+                        if 'month' in temporal and 'year' in temporal:
+                            temporal_filtered = [t for t in all_transactions 
+                                                if _matches_month_year(t.get('purchase_date', ''), temporal['month'], temporal['year'])]
+                        elif 'start_date' in temporal:
+                            start = temporal['start_date']
+                            end = temporal.get('end_date')
+                            temporal_filtered = [t for t in all_transactions if t.get('purchase_date', '') >= start]
+                            if end:
+                                temporal_filtered = [t for t in temporal_filtered if t.get('purchase_date', '') <= end]
+                    
+                    # Use LLM to semantically identify matching merchants
+                    llm_filter_result = filter_transactions_with_llm(user_query, all_transactions, temporal_filtered)
+                    
+                    matching_txns = llm_filter_result.get('matching_transactions', [])
+                    matching_merchants = llm_filter_result.get('matching_merchants', [])
+                    reasoning = llm_filter_result.get('reasoning', '')
+                    
+                    verification = f"LLM identified {len(matching_merchants)} matching merchants from {len(temporal_filtered)} transactions"
+                    
+                    if matching_txns:
+                        # Calculate totals for matched transactions
+                        total_spent = sum(abs(float(t.get('amount', 0))) for t in matching_txns if float(t.get('amount', 0)) < 0)
+                        
+                        context_text = f"""SEMANTIC SEARCH RESULT (using AI's real-world knowledge):
+
+Matching merchants identified: {', '.join(matching_merchants)}
+Reasoning: {reasoning}
+
+TRANSACTIONS FOUND ({len(matching_txns)} total, ${total_spent:.2f} spent):"""
+                        for t in matching_txns[:15]:  # Show up to 15
+                            context_text += f"\n• {t.get('description')}: ${abs(float(t.get('amount', 0))):.2f} on {t.get('purchase_date')}"
+                    else:
+                        context_text = f"""SEMANTIC SEARCH RESULT:
+
+{reasoning}
+
+No matching transactions found for your query in the specified time period.
+Searched {len(temporal_filtered)} transactions."""
+                    
+                    # Build prompt and proceed to generation
+                    conv_history = ""
+                    if conversation_context and conversation_context.get('current_conversation'):
+                        conv_history = "\nRECENT CONVERSATION:\n"
+                        for ctx in conversation_context['current_conversation'][:3]:
+                            conv_history += f"- {ctx['text']}\n"
+                    
+                    prompt = f"""You are a financial advisor with access to the user's transaction data.
+{conv_history}
+{context_text}
+
+USER QUESTION: {user_query}
+
+IMPORTANT: Use the transaction data above to answer the question. Present the information clearly.
+
+Your response:"""
+                    
+                    # Skip to response generation
+                    try:
+                        response = model.generate_content(prompt)
+                        
+                        return jsonify({
+                            'response': response.text,
+                            'grounded': True,
+                            'method': method_used,
+                            'verification': verification,
+                            'matching_merchants': matching_merchants,
+                            'query_intent': llm_classification.get('intent', 'financial'),
+                            'intent_reasoning': reasoning,
+                            'needs_transaction_data': True,
+                            'needs_general_knowledge': False
+                        })
+                    except Exception as e:
+                        logger.error(f"Response generation failed: {e}")
+                        return jsonify({
+                            'error': 'Failed to generate response',
+                            'response': 'I apologize, but I encountered an error. Please try again.'
+                        }), 500
+            
+            if needs_structured:
+                # PATH 1: Structured query for data operations (MAX, MIN, SUM, etc.)
+                method_used = 'structured_query'
+                
+                # Get ALL transactions from cache
+                all_transactions = CACHED_TRANSACTIONS.get('data', [])
+                if not all_transactions:
+                    # Trigger cache population if empty
+                    all_transactions = generate_realistic_transactions(365, [])
+                
+                # Execute precise computation
+                structured_result = execute_structured_query(classification, all_transactions)
+                verification = structured_result.get('verification', '')
+                
+                # Build context from computed result
+                if structured_result['result']:
+                    if classification['intent'] == 'find_maximum':
+                        txn = structured_result['result']
+                        context_text = f"""VERIFIED RESULT ({verification}):
+
+The BIGGEST expense is:
+• {txn.get('description')}: ${abs(float(txn.get('amount', 0))):.2f} on {txn.get('purchase_date')}
+Category: {txn.get('category')}
+
+Top 5 expenses for reference:"""
+                        for t in structured_result.get('top_5', [])[:5]:
+                            context_text += f"\n• {t.get('description')}: ${abs(float(t.get('amount', 0))):.2f} on {t.get('purchase_date')}"
+                        
+                    elif classification['intent'] == 'find_minimum':
+                        txn = structured_result['result']
+                        context_text = f"""VERIFIED RESULT ({verification}):
+
+The SMALLEST expense is:
+• {txn.get('description')}: ${abs(float(txn.get('amount', 0))):.2f} on {txn.get('purchase_date')}"""
+
+                    elif classification['intent'] == 'calculate_total':
+                        r = structured_result['result']
+                        context_text = f"""VERIFIED RESULT ({verification}):
+
+TOTAL SPENT: ${r['total']:.2f}
+Number of transactions: {r['count']}
+
+Sample transactions:"""
+                        for t in structured_result.get('expenses', [])[:10]:
+                            context_text += f"\n• {t.get('description')}: ${abs(float(t.get('amount', 0))):.2f}"
+
+                    elif classification['intent'] == 'calculate_average':
+                        r = structured_result['result']
+                        context_text = f"""VERIFIED RESULT ({verification}):
+
+AVERAGE EXPENSE: ${r['average']:.2f}
+Total spent: ${r['total']:.2f}
+Number of transactions: {r['count']}"""
+
+                    elif classification['intent'] == 'count':
+                        r = structured_result['result']
+                        context_text = f"""VERIFIED RESULT ({verification}):
+
+COUNT: {r['count']} transactions found"""
+
+                    elif classification['intent'] == 'find_recent':
+                        recent_txns = structured_result.get('recent_transactions', [])
+                        context_text = f"""VERIFIED RESULT ({verification}):
+
+MOST RECENT TRANSACTIONS (sorted by date, newest first):"""
+                        for t in recent_txns:
+                            context_text += f"\n• {t.get('description')}: ${abs(float(t.get('amount', 0))):.2f} on {t.get('purchase_date')}"
+                else:
+                    context_text = f"No matching transactions found. {verification}"
+                
+                # Build conversation history string
+                conv_history = ""
+                if conversation_context and conversation_context.get('current_conversation'):
+                    conv_history = "\nRECENT CONVERSATION:\n"
+                    for ctx in conversation_context['current_conversation'][:3]:
+                        conv_history += f"- {ctx['text']}\n"
+                
+                prompt = f"""You are a financial advisor with access to VERIFIED, COMPUTED financial data.
+{conv_history}
+{context_text}
+
+USER QUESTION: {user_query}
+
+IMPORTANT INSTRUCTIONS:
+- The data above has been VERIFIED by checking ALL relevant transactions
+- Simply present the pre-computed answer clearly
+- Do NOT recalculate or second-guess the provided numbers
+- If the user uses words like "they", "it", "that", "this", refer to the RECENT CONVERSATION above
+- Keep response concise
+
+Your response:"""
+            
+            else:
+                # PATH 2: Semantic search for conversational queries
+                # Build conversation history string
+                conv_history = ""
+                if conversation_context and conversation_context.get('current_conversation'):
+                    conv_history = "\nRECENT CONVERSATION:\n"
+                    for ctx in conversation_context['current_conversation'][:3]:
+                        conv_history += f"- {ctx['text']}\n"
+                
+                if rag_svc and rag_svc.enabled and context:
+                    base_prompt = rag_svc.build_grounded_prompt(user_query, context)
+                    # Inject conversation history
+                    if conv_history:
+                        prompt = base_prompt.replace("USER QUESTION:", f"{conv_history}\nUSER QUESTION:")
+                    else:
+                        prompt = base_prompt
+                else:
+                    # Fallback to basic prompt if RAG not available
+                    prompt = f"""You are a helpful financial advisor. Answer the following question:
+{conv_history}
+USER QUESTION: {user_query}
+
+If the user refers to something using "they", "it", "that", check the RECENT CONVERSATION above.
+
+Provide helpful financial advice."""
+            
+            try:
+                response = model.generate_content(prompt)
+                
+                # Build temporal filter description if available
+                temporal_filter = classification.get('filters', {}).get('temporal')
+                temporal_desc = None
+                if temporal_filter:
+                    from datetime import datetime
+                    temporal_desc = format_temporal_filter_human(temporal_filter, datetime.now())
+                
+                # Embed conversation turns for future context
+                if RAG_AVAILABLE and conversation_id:
+                    try:
+                        rag_svc = get_rag_service()
+                        timestamp = datetime.now().isoformat()
+                        # Embed user message
+                        embed_conversation_message(
+                            rag_svc, conversation_id, 
+                            str(uuid.uuid4()), 'user', user_query, timestamp
+                        )
+                        # Embed assistant response
+                        embed_conversation_message(
+                            rag_svc, conversation_id,
+                            str(uuid.uuid4()), 'assistant', response.text, timestamp
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to embed conversation: {e}")
+                
+                return jsonify({
+                    'response': response.text,
+                    'grounded': True,
+                    'method': method_used,
+                    'verification': verification,
+                    'temporal_filter': temporal_desc,
+                    'llm_extracted': classification.get('filters', {}).get('llm_extracted', False),
+                    'conversation_context_used': conversation_context is not None and len(conversation_context.get('current_conversation', [])) > 0,
+                    'query_intent': llm_classification.get('intent') if llm_classification else None,
+                    'intent_reasoning': llm_classification.get('reasoning') if llm_classification else None,
+                    'needs_transaction_data': llm_classification.get('needs_transaction_data') if llm_classification else None,
+                    'needs_general_knowledge': llm_classification.get('needs_general_knowledge') if llm_classification else None,
+                    'entities_detected': llm_classification.get('entities') if llm_classification else None
+                })
+            except Exception as e:
+                logger.error(f"Response generation failed: {e}")
+                return jsonify({
+                    'error': 'Failed to generate response',
+                    'response': 'I apologize, but I encountered an error. Please try again.'
+                }), 500
+    
+    except Exception as e:
+        logger.error(f"Error in chat endpoint: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rag/embed-transactions', methods=['POST'])
+def embed_transactions_endpoint():
+    """
+    Embed transactions into RAG vector database.
+    
+    Accepts a list of transactions to embed.
+    """
+    if not RAG_AVAILABLE:
+        return jsonify({'error': 'RAG service not available'}), 503
+    
+    try:
+        data = request.get_json()
+        transactions = data.get('transactions', [])
+        
+        if not transactions:
+            return jsonify({'error': 'No transactions provided'}), 400
+        
+        rag_svc = get_rag_service()
+        if not rag_svc or not rag_svc.enabled:
+            return jsonify({'error': 'RAG service not initialized'}), 503
+        
+        count = rag_svc.embed_transactions_batch(transactions)
+        
+        return jsonify({
+            'success': True,
+            'embedded_count': count,
+            'total_provided': len(transactions)
+        })
+    
+    except Exception as e:
+        logger.error(f"Error embedding transactions: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rag/stats', methods=['GET'])
+def get_rag_stats():
+    """Get RAG vector database statistics."""
+    if not RAG_AVAILABLE:
+        return jsonify({
+            'available': False,
+            'message': 'RAG service not available'
+        })
+    
+    try:
+        rag_svc = get_rag_service()
+        if not rag_svc:
+            return jsonify({
+                'available': False,
+                'message': 'RAG service not initialized'
+            })
+        
+        stats = rag_svc.get_collection_stats()
+        
+        return jsonify({
+            'available': rag_svc.enabled,
+            'collections': stats
+        })
+    
+    except Exception as e:
+        logger.error(f"Error getting RAG stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rag/sync-transactions', methods=['POST'])
+def sync_transactions_to_rag():
+    """
+    Sync current Plaid transactions to RAG database.
+    
+    Fetches transactions from Plaid and embeds them.
+    """
+    if not RAG_AVAILABLE:
+        return jsonify({'error': 'RAG service not available'}), 503
+    
+    try:
+        rag_svc = get_rag_service()
+        if not rag_svc or not rag_svc.enabled:
+            return jsonify({'error': 'RAG service not initialized'}), 503
+        
+        # Get transactions from Plaid
+        try:
+            access_token = get_or_create_sandbox_token()
+            
+            cursor = PLAID_TRANSACTION_CURSORS.get('default', '')
+            all_transactions = []
+            has_more = True
+            
+            while has_more:
+                sync_request = TransactionsSyncRequest(
+                    access_token=access_token,
+                    cursor=cursor if cursor else None
+                )
+                sync_response = plaid_client.transactions_sync(sync_request)
+                
+                for trans in sync_response['added']:
+                    all_transactions.append({
+                        'transaction_id': trans['transaction_id'],
+                        'account_id': trans['account_id'],
+                        'date': str(trans['date']),
+                        'name': trans['name'],
+                        'merchant_name': trans.get('merchant_name'),
+                        'amount': trans['amount'],
+                        'category': trans.get('category', []),
+                        'pending': trans['pending']
+                    })
+                
+                cursor = sync_response['next_cursor']
+                has_more = sync_response['has_more']
+                
+                if len(all_transactions) > 500:
+                    break
+            
+            PLAID_TRANSACTION_CURSORS['default'] = cursor
+            
+        except Exception as e:
+            logger.warning(f"Plaid sync failed, using mock data: {e}")
+            # Use mock transactions
+            all_transactions = generate_realistic_transactions(30, [])
+        
+        # Transform and embed
+        transformed = []
+        for t in all_transactions:
+            transformed.append({
+                '_id': t.get('transaction_id') or t.get('_id'),
+                'description': t.get('merchant_name') or t.get('name') or t.get('description'),
+                'amount': t.get('amount'),
+                'purchase_date': t.get('date') or t.get('purchase_date'),
+                'category': t.get('category')
+            })
+        
+        count = rag_svc.embed_transactions_batch(transformed)
+        
+        return jsonify({
+            'success': True,
+            'embedded_count': count,
+            'total_fetched': len(all_transactions)
+        })
+    
+    except Exception as e:
+        logger.error(f"Error syncing transactions to RAG: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rag/initialize', methods=['POST'])
+def initialize_rag_data():
+    """
+    Initialize RAG database with all financial data on app startup.
+    Only syncs if data is missing or force_refresh is True.
+    """
+    if not RAG_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'message': 'RAG service not available',
+            'initialized': False
+        })
+    
+    try:
+        import time
+        start_time = time.time()
+        
+        data = request.get_json() or {}
+        force_refresh = data.get('force_refresh', False)
+        
+        rag_svc = get_rag_service()
+        if not rag_svc or not rag_svc.enabled:
+            return jsonify({
+                'success': False,
+                'message': 'RAG service not initialized',
+                'initialized': False
+            })
+        
+        # Check current stats
+        stats = rag_svc.get_collection_stats()
+        transactions_count = stats.get('transactions', 0)
+        
+        # If data exists and no force refresh, return early
+        if transactions_count > 0 and not force_refresh:
+            elapsed = time.time() - start_time
+            return jsonify({
+                'success': True,
+                'message': 'Data already loaded',
+                'initialized': True,
+                'skipped_sync': True,
+                'stats': stats,
+                'elapsed_seconds': round(elapsed, 2)
+            })
+        
+        # Use cached transactions from first load instead of re-fetching
+        all_transactions = []
+        
+        # Check if we have cached transactions from generate_realistic_transactions
+        if CACHED_TRANSACTIONS['data'] is not None and len(CACHED_TRANSACTIONS['data']) > 0:
+            logger.info(f"Using {len(CACHED_TRANSACTIONS['data'])} cached transactions for RAG")
+            all_transactions = CACHED_TRANSACTIONS['data']
+        else:
+            # No cache yet - trigger generation which will cache
+            logger.info("No cached transactions, generating for RAG")
+            all_transactions = generate_realistic_transactions(365, [])
+        
+        # Transform and embed transactions
+        # Cached transactions already have: _id, description, amount, purchase_date, category
+        transformed = []
+        for t in all_transactions:
+            trans_id = t.get('_id') or t.get('transaction_id')
+            if not trans_id:
+                continue  # Skip transactions without ID
+            transformed.append({
+                '_id': trans_id,
+                'description': t.get('description') or t.get('merchant_name') or t.get('name'),
+                'amount': t.get('amount'),
+                'purchase_date': t.get('purchase_date') or t.get('date'),
+                'category': t.get('category')
+            })
+        
+        embedded_count = rag_svc.embed_transactions_batch(transformed)
+        
+        # Calculate and embed spending patterns by category
+        category_totals = defaultdict(float)
+        for t in all_transactions:
+            categories = t.get('category', [])
+            if isinstance(categories, list) and categories:
+                category = categories[0]
+            elif isinstance(categories, str):
+                category = categories
+            else:
+                category = 'Uncategorized'
+            category_totals[category] += abs(float(t.get('amount', 0)))
+        
+        patterns_count = 0
+        for category, total in category_totals.items():
+            pattern = {
+                'id': f"pattern_{category}",
+                'category': category,
+                'total': total,
+                'period': 'last 90 days',
+                'budget': 0,
+                'variance_percent': 0
+            }
+            if rag_svc.embed_spending_pattern(pattern):
+                patterns_count += 1
+        
+        elapsed = time.time() - start_time
+        final_stats = rag_svc.get_collection_stats()
+        
+        logger.info(f"RAG initialized: {embedded_count} transactions, {patterns_count} patterns in {elapsed:.2f}s")
+        
+        return jsonify({
+            'success': True,
+            'message': 'RAG data initialized successfully',
+            'initialized': True,
+            'skipped_sync': False,
+            'transactions_embedded': embedded_count,
+            'patterns_embedded': patterns_count,
+            'stats': final_stats,
+            'elapsed_seconds': round(elapsed, 2)
+        })
+    
+    except Exception as e:
+        logger.error(f"Error initializing RAG data: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'initialized': False
+        }), 500
+
+
+# ========== Conversation History Endpoints ==========
+
+@app.route('/api/conversations', methods=['POST'])
+def create_conversation():
+    """Create a new conversation"""
+    try:
+        data = request.get_json() or {}
+        conversation_id = data.get('id') or str(uuid.uuid4())
+        user_id = data.get('user_id', 'default_user')
+        title = data.get('title', 'New Conversation')
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO conversations 
+            (id, user_id, created_at, updated_at, title, message_count)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            conversation_id,
+            user_id,
+            datetime.now().isoformat(),
+            datetime.now().isoformat(),
+            title,
+            0
+        ))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'conversation_id': conversation_id,
+            'status': 'created'
+        })
+    except Exception as e:
+        logger.error(f"Error creating conversation: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/conversations', methods=['GET'])
+def get_conversations():
+    """Get list of all conversations"""
+    try:
+        user_id = request.args.get('user_id', 'default_user')
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, title, created_at, updated_at, message_count
+            FROM conversations
+            WHERE user_id = ?
+            ORDER BY updated_at DESC
+            LIMIT 50
+        ''', (user_id,))
+        
+        conversations = []
+        for row in cursor.fetchall():
+            conversations.append({
+                'id': row[0],
+                'title': row[1],
+                'created_at': row[2],
+                'updated_at': row[3],
+                'message_count': row[4]
+            })
+        
+        conn.close()
+        
+        return jsonify({'conversations': conversations})
+    except Exception as e:
+        logger.error(f"Error getting conversations: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/conversations/<conversation_id>/messages', methods=['GET'])
+def get_conversation_messages(conversation_id):
+    """Get all messages in a conversation"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, role, content, timestamp, metadata
+            FROM messages
+            WHERE conversation_id = ?
+            ORDER BY timestamp ASC
+        ''', (conversation_id,))
+        
+        messages = []
+        for row in cursor.fetchall():
+            messages.append({
+                'id': row[0],
+                'role': row[1],
+                'content': row[2],
+                'timestamp': row[3],
+                'metadata': json.loads(row[4]) if row[4] else {}
+            })
+        
+        conn.close()
+        
+        return jsonify({'messages': messages})
+    except Exception as e:
+        logger.error(f"Error getting messages: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/conversations/<conversation_id>/messages', methods=['POST'])
+def save_message(conversation_id):
+    """Save a message to a conversation"""
+    try:
+        data = request.get_json()
+        message_id = str(uuid.uuid4())
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Ensure conversation exists
+        cursor.execute('''
+            INSERT OR IGNORE INTO conversations 
+            (id, created_at, updated_at, title, message_count)
+            VALUES (?, ?, ?, ?, 0)
+        ''', (conversation_id, datetime.now().isoformat(), datetime.now().isoformat(), 'New Conversation'))
+        
+        # Save message
+        cursor.execute('''
+            INSERT INTO messages 
+            (id, conversation_id, role, content, timestamp, metadata)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            message_id,
+            conversation_id,
+            data['role'],
+            data['content'],
+            datetime.now().isoformat(),
+            json.dumps(data.get('metadata', {}))
+        ))
+        
+        # Update conversation
+        cursor.execute('''
+            UPDATE conversations 
+            SET updated_at = ?, message_count = message_count + 1
+            WHERE id = ?
+        ''', (datetime.now().isoformat(), conversation_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'message_id': message_id,
+            'status': 'saved'
+        })
+    except Exception as e:
+        logger.error(f"Error saving message: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/conversations/<conversation_id>', methods=['DELETE'])
+def delete_conversation(conversation_id):
+    """Delete a conversation and its messages from SQLite and ChromaDB"""
+    try:
+        # Delete from SQLite
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Delete messages first (foreign key)
+        cursor.execute('DELETE FROM messages WHERE conversation_id = ?', (conversation_id,))
+        msg_count = cursor.rowcount
+        
+        # Delete conversation
+        cursor.execute('DELETE FROM conversations WHERE id = ?', (conversation_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        # Delete from ChromaDB conversation memory
+        if RAG_AVAILABLE:
+            try:
+                rag_svc = get_rag_service()
+                if rag_svc and rag_svc.enabled:
+                    from rag_service import CONVERSATION_MEMORY_COLLECTION
+                    collection = rag_svc.chroma_client.get_collection(
+                        name=CONVERSATION_MEMORY_COLLECTION,
+                        embedding_function=rag_svc.embedding_function
+                    )
+                    # Get all message IDs for this conversation
+                    results = collection.get(where={'conversation_id': conversation_id})
+                    if results['ids']:
+                        collection.delete(ids=results['ids'])
+                        logger.info(f"Deleted {len(results['ids'])} embeddings from ChromaDB")
+            except Exception as e:
+                logger.warning(f"ChromaDB cleanup failed: {e}")
+        
+        logger.info(f"Deleted conversation {conversation_id} with {msg_count} messages")
+        
+        return jsonify({
+            'status': 'deleted',
+            'conversation_id': conversation_id,
+            'messages_deleted': msg_count
+        })
+    except Exception as e:
+        logger.error(f"Error deleting conversation: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ========== End Conversation History Endpoints ==========
+
+
+# ========== User Profile API Endpoints ==========
+
+@app.route('/api/profile', methods=['GET'])
+def get_user_profile():
+    """Get current user's complete profile."""
+    logger.info("GET /api/profile")
+    
+    if not PROFILE_AVAILABLE:
+        return jsonify({'error': 'Profile service not available'}), 503
+    
+    try:
+        user_id = request.args.get('user_id', 'default_user')
+        profile_svc = get_profile_service()
+        profile = profile_svc.get_profile(user_id)
+        return jsonify(profile)
+    except Exception as e:
+        logger.error(f"Error getting profile: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/profile', methods=['PUT'])
+def update_user_profile():
+    """Update user profile fields."""
+    logger.info("PUT /api/profile")
+    
+    if not PROFILE_AVAILABLE:
+        return jsonify({'error': 'Profile service not available'}), 503
+    
+    try:
+        data = request.json
+        user_id = data.get('user_id', 'default_user')
+        profile_svc = get_profile_service()
+        
+        success = profile_svc.update_profile(user_id, data)
+        if success:
+            return jsonify({'status': 'updated'})
+        return jsonify({'error': 'Update failed'}), 500
+    except Exception as e:
+        logger.error(f"Error updating profile: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/profile/demographics', methods=['PUT'])
+def update_demographics():
+    """Update user demographics."""
+    logger.info("PUT /api/profile/demographics")
+    
+    if not PROFILE_AVAILABLE:
+        return jsonify({'error': 'Profile service not available'}), 503
+    
+    try:
+        data = request.json
+        user_id = data.get('user_id', 'default_user')
+        profile_svc = get_profile_service()
+        
+        success = profile_svc.update_demographics(user_id, data)
+        if success:
+            return jsonify({'status': 'updated'})
+        return jsonify({'error': 'Update failed'}), 500
+    except Exception as e:
+        logger.error(f"Error updating demographics: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/profile/financials', methods=['PUT'])
+def update_financials():
+    """Update user financial attributes."""
+    logger.info("PUT /api/profile/financials")
+    
+    if not PROFILE_AVAILABLE:
+        return jsonify({'error': 'Profile service not available'}), 503
+    
+    try:
+        data = request.json
+        user_id = data.get('user_id', 'default_user')
+        profile_svc = get_profile_service()
+        
+        success = profile_svc.update_financials(user_id, data)
+        if success:
+            return jsonify({'status': 'updated'})
+        return jsonify({'error': 'Update failed'}), 500
+    except Exception as e:
+        logger.error(f"Error updating financials: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/profile/preferences', methods=['PUT'])
+def update_preferences():
+    """Update user preferences."""
+    logger.info("PUT /api/profile/preferences")
+    
+    if not PROFILE_AVAILABLE:
+        return jsonify({'error': 'Profile service not available'}), 503
+    
+    try:
+        data = request.json
+        user_id = data.get('user_id', 'default_user')
+        profile_svc = get_profile_service()
+        
+        success = profile_svc.update_preferences(user_id, data)
+        if success:
+            return jsonify({'status': 'updated'})
+        return jsonify({'error': 'Update failed'}), 500
+    except Exception as e:
+        logger.error(f"Error updating preferences: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/profile/onboarding', methods=['POST'])
+def complete_onboarding():
+    """Complete user onboarding with all profile data."""
+    logger.info("POST /api/profile/onboarding")
+    
+    if not PROFILE_AVAILABLE:
+        return jsonify({'error': 'Profile service not available'}), 503
+    
+    try:
+        data = request.json
+        user_id = data.get('user_id', 'default_user')
+        profile_svc = get_profile_service()
+        
+        success = profile_svc.complete_onboarding(user_id, data)
+        if success:
+            return jsonify({'status': 'onboarding_complete'})
+        return jsonify({'error': 'Onboarding failed'}), 500
+    except Exception as e:
+        logger.error(f"Error completing onboarding: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/profile/behaviors', methods=['GET'])
+def get_user_behaviors():
+    """Get user's calculated behavioral attributes."""
+    logger.info("GET /api/profile/behaviors")
+    
+    if not PROFILE_AVAILABLE:
+        return jsonify({'error': 'Profile service not available'}), 503
+    
+    try:
+        user_id = request.args.get('user_id', 'default_user')
+        profile_svc = get_profile_service()
+        
+        # Get transactions and update behaviors
+        all_transactions = CACHED_TRANSACTIONS.get('data', [])
+        if all_transactions:
+            behaviors = profile_svc.update_behaviors(user_id, all_transactions)
+        else:
+            profile = profile_svc.get_profile(user_id)
+            behaviors = profile.get('behaviors', {})
+        
+        return jsonify(behaviors)
+    except Exception as e:
+        logger.error(f"Error getting behaviors: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/profile/context', methods=['GET'])
+def get_personalization_context():
+    """Get personalization context string for AI prompts."""
+    logger.info("GET /api/profile/context")
+    
+    if not PROFILE_AVAILABLE:
+        return jsonify({'error': 'Profile service not available'}), 503
+    
+    try:
+        user_id = request.args.get('user_id', 'default_user')
+        profile_svc = get_profile_service()
+        context = profile_svc.get_personalization_context(user_id)
+        return jsonify({'context': context})
+    except Exception as e:
+        logger.error(f"Error getting context: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ========== End User Profile Endpoints ==========
+
+
+# ========== AGENTIC FUNCTION CALLING ==========
+
+# Tool definitions for Gemini function calling
+FINANCIAL_TOOLS = [
+    genai.protos.Tool(
+        function_declarations=[
+            genai.protos.FunctionDeclaration(
+                name="get_transactions",
+                description="Get user's financial transactions, optionally filtered by date range, merchant, or category. Use this to see what purchases were made.",
+                parameters=genai.protos.Schema(
+                    type=genai.protos.Type.OBJECT,
+                    properties={
+                        "start_date": genai.protos.Schema(type=genai.protos.Type.STRING, description="Start date in YYYY-MM-DD format"),
+                        "end_date": genai.protos.Schema(type=genai.protos.Type.STRING, description="End date in YYYY-MM-DD format"),
+                        "merchant": genai.protos.Schema(type=genai.protos.Type.STRING, description="Filter by merchant name (e.g., 'Starbucks')"),
+                        "category": genai.protos.Schema(type=genai.protos.Type.STRING, description="Filter by category (e.g., 'Food & Drink', 'Shopping')"),
+                        "limit": genai.protos.Schema(type=genai.protos.Type.INTEGER, description="Maximum number of transactions to return")
+                    }
+                )
+            ),
+            genai.protos.FunctionDeclaration(
+                name="calculate_spending",
+                description="Calculate aggregate spending metrics like total, average, count, max, or min. Use this for questions about spending amounts.",
+                parameters=genai.protos.Schema(
+                    type=genai.protos.Type.OBJECT,
+                    properties={
+                        "operation": genai.protos.Schema(type=genai.protos.Type.STRING, description="The calculation: 'total', 'average', 'count', 'max', or 'min'"),
+                        "start_date": genai.protos.Schema(type=genai.protos.Type.STRING, description="Start date YYYY-MM-DD"),
+                        "end_date": genai.protos.Schema(type=genai.protos.Type.STRING, description="End date YYYY-MM-DD"),
+                        "category": genai.protos.Schema(type=genai.protos.Type.STRING, description="Filter by category"),
+                        "merchant": genai.protos.Schema(type=genai.protos.Type.STRING, description="Filter by merchant")
+                    },
+                    required=["operation"]
+                )
+            ),
+            genai.protos.FunctionDeclaration(
+                name="identify_merchants_by_type",
+                description="Use AI to identify merchants that match a business type from user's transactions. For example, identify which merchants are 'coffee shops', 'fast food', 'streaming services', etc.",
+                parameters=genai.protos.Schema(
+                    type=genai.protos.Type.OBJECT,
+                    properties={
+                        "business_type": genai.protos.Schema(type=genai.protos.Type.STRING, description="Type of business to search for (e.g., 'coffee shops', 'restaurants', 'streaming services')"),
+                        "start_date": genai.protos.Schema(type=genai.protos.Type.STRING, description="Start date YYYY-MM-DD"),
+                        "end_date": genai.protos.Schema(type=genai.protos.Type.STRING, description="End date YYYY-MM-DD")
+                    },
+                    required=["business_type"]
+                )
+            ),
+            genai.protos.FunctionDeclaration(
+                name="get_spending_by_category",
+                description="Get a breakdown of spending by category for a time period.",
+                parameters=genai.protos.Schema(
+                    type=genai.protos.Type.OBJECT,
+                    properties={
+                        "start_date": genai.protos.Schema(type=genai.protos.Type.STRING, description="Start date YYYY-MM-DD"),
+                        "end_date": genai.protos.Schema(type=genai.protos.Type.STRING, description="End date YYYY-MM-DD")
+                    }
+                )
+            ),
+            genai.protos.FunctionDeclaration(
+                name="get_current_date",
+                description="Get today's date. Use this to calculate relative dates like 'this month', 'last week', etc.",
+                parameters=genai.protos.Schema(
+                    type=genai.protos.Type.OBJECT,
+                    properties={}
+                )
+            ),
+            genai.protos.FunctionDeclaration(
+                name="get_user_profile",
+                description="Get the user's profile information including demographics (age, income, employment, occupation), financial goals (primary goal, risk tolerance, investment experience), and preferences. Use this to answer ANY questions about the user personally, such as 'Is my job high paying?', 'What is my income?', 'What are my goals?', 'Am I a beginner investor?', etc.",
+                parameters=genai.protos.Schema(
+                    type=genai.protos.Type.OBJECT,
+                    properties={
+                        "section": genai.protos.Schema(type=genai.protos.Type.STRING, description="Optional: 'demographics', 'financials', 'behaviors', 'preferences', or 'all' (default)")
+                    }
+                )
+            ),
+            genai.protos.FunctionDeclaration(
+                name="search_transactions_semantic",
+                description="Search for transactions using semantic/natural language queries. Uses RAG (Retrieval Augmented Generation) with ChromaDB to find relevant transactions. Use this for complex or vague queries like 'entertainment subscriptions', 'weekend spending', 'luxury purchases', 'eating out', etc. Returns the most relevant transactions based on meaning, not just text matching.",
+                parameters=genai.protos.Schema(
+                    type=genai.protos.Type.OBJECT,
+                    properties={
+                        "query": genai.protos.Schema(type=genai.protos.Type.STRING, description="Natural language search query (e.g., 'coffee shops', 'streaming services', 'restaurants')"),
+                        "limit": genai.protos.Schema(type=genai.protos.Type.INTEGER, description="Maximum results to return (default 10)")
+                    },
+                    required=["query"]
+                )
+            )
+        ]
+    )
+]
+
+
+def execute_agentic_tool(tool_name: str, args: dict) -> dict:
+    """Execute a tool and return the result."""
+    logger.info(f"Executing tool: {tool_name} with args: {args}")
+    
+    today = datetime.now()
+    
+    # Get all transactions
+    all_transactions = CACHED_TRANSACTIONS.get('data', [])
+    if not all_transactions:
+        all_transactions = generate_realistic_transactions(365, [])
+    
+    if tool_name == "get_current_date":
+        return {
+            "today": today.strftime("%Y-%m-%d"),
+            "day_of_week": today.strftime("%A"),
+            "month": today.strftime("%B"),
+            "year": today.year
+        }
+    
+    elif tool_name == "get_transactions":
+        filtered = all_transactions.copy()
+        
+        # Apply date filters
+        if args.get("start_date"):
+            filtered = [t for t in filtered if t.get('purchase_date', '') >= args['start_date']]
+        if args.get("end_date"):
+            filtered = [t for t in filtered if t.get('purchase_date', '') <= args['end_date']]
+        
+        # Apply merchant filter
+        if args.get("merchant"):
+            merchant = args['merchant'].lower()
+            filtered = [t for t in filtered if merchant in t.get('description', '').lower()]
+        
+        # Apply category filter
+        if args.get("category"):
+            category = args['category'].lower()
+            filtered = [t for t in filtered if category in t.get('category', '').lower()]
+        
+        # Apply limit (convert to int since Gemini returns floats)
+        limit = int(args.get("limit", 20))
+        filtered = sorted(filtered, key=lambda x: x.get('purchase_date', ''), reverse=True)[:limit]
+        
+        return {
+            "transactions": [
+                {
+                    "merchant": t.get('description'),
+                    "amount": abs(float(t.get('amount', 0))),
+                    "date": t.get('purchase_date'),
+                    "category": t.get('category')
+                }
+                for t in filtered
+            ],
+            "count": len(filtered)
+        }
+    
+    elif tool_name == "calculate_spending":
+        filtered = [t for t in all_transactions if float(t.get('amount', 0)) < 0]  # Expenses only
+        
+        # Apply date filters
+        if args.get("start_date"):
+            filtered = [t for t in filtered if t.get('purchase_date', '') >= args['start_date']]
+        if args.get("end_date"):
+            filtered = [t for t in filtered if t.get('purchase_date', '') <= args['end_date']]
+        
+        # Apply merchant filter
+        if args.get("merchant"):
+            merchant = args['merchant'].lower()
+            filtered = [t for t in filtered if merchant in t.get('description', '').lower()]
+        
+        # Apply category filter
+        if args.get("category"):
+            category = args['category'].lower()
+            filtered = [t for t in filtered if category in t.get('category', '').lower()]
+        
+        operation = args.get("operation", "total")
+        amounts = [abs(float(t.get('amount', 0))) for t in filtered]
+        
+        if not amounts:
+            return {"result": 0, "count": 0, "message": "No matching transactions found"}
+        
+        if operation == "total":
+            return {"total": sum(amounts), "count": len(amounts)}
+        elif operation == "average":
+            return {"average": sum(amounts) / len(amounts), "count": len(amounts)}
+        elif operation == "count":
+            return {"count": len(amounts)}
+        elif operation == "max":
+            max_idx = amounts.index(max(amounts))
+            return {"max_amount": max(amounts), "merchant": filtered[max_idx].get('description'), "date": filtered[max_idx].get('purchase_date')}
+        elif operation == "min":
+            min_idx = amounts.index(min(amounts))
+            return {"min_amount": min(amounts), "merchant": filtered[min_idx].get('description'), "date": filtered[min_idx].get('purchase_date')}
+    
+    elif tool_name == "identify_merchants_by_type":
+        business_type = args.get("business_type", "")
+        
+        # Get filtered transactions by date
+        filtered = all_transactions.copy()
+        if args.get("start_date"):
+            filtered = [t for t in filtered if t.get('purchase_date', '') >= args['start_date']]
+        if args.get("end_date"):
+            filtered = [t for t in filtered if t.get('purchase_date', '') <= args['end_date']]
+        
+        # Use the LLM filter function we already have
+        result = filter_transactions_with_llm(
+            f"Find {business_type}", 
+            all_transactions, 
+            filtered
+        )
+        
+        matching = result.get('matching_transactions', [])
+        merchants = result.get('matching_merchants', [])
+        
+        # Calculate totals per merchant
+        merchant_totals = {}
+        for t in matching:
+            desc = t.get('description', 'Unknown')
+            amt = abs(float(t.get('amount', 0)))
+            merchant_totals[desc] = merchant_totals.get(desc, 0) + amt
+        
+        return {
+            "business_type": business_type,
+            "matching_merchants": merchants,
+            "merchant_spending": merchant_totals,
+            "total_transactions": len(matching),
+            "total_spent": sum(merchant_totals.values()),
+            "reasoning": result.get('reasoning', '')
+        }
+    
+    elif tool_name == "get_spending_by_category":
+        filtered = [t for t in all_transactions if float(t.get('amount', 0)) < 0]
+        
+        # Apply date filters
+        if args.get("start_date"):
+            filtered = [t for t in filtered if t.get('purchase_date', '') >= args['start_date']]
+        if args.get("end_date"):
+            filtered = [t for t in filtered if t.get('purchase_date', '') <= args['end_date']]
+        
+        # Group by category
+        category_totals = {}
+        for t in filtered:
+            cat = t.get('category', 'Other')
+            amt = abs(float(t.get('amount', 0)))
+            category_totals[cat] = category_totals.get(cat, 0) + amt
+        
+        return {
+            "categories": category_totals,
+            "total": sum(category_totals.values())
+        }
+    
+    elif tool_name == "get_user_profile":
+        section = args.get("section", "all")
+        user_id = args.get("user_id", "default_user")
+        
+        if PROFILE_AVAILABLE:
+            try:
+                profile_svc = get_profile_service()
+                full_profile = profile_svc.get_profile(user_id)
+                
+                if section == "all":
+                    return {
+                        "name": full_profile.get('core', {}).get('name', 'User'),
+                        "demographics": full_profile.get('demographics', {}),
+                        "financials": full_profile.get('financials', {}),
+                        "behaviors": full_profile.get('behaviors', {}),
+                        "preferences": full_profile.get('preferences', {}),
+                        "onboarding_completed": full_profile.get('core', {}).get('onboarding_completed', False)
+                    }
+                elif section == "demographics":
+                    return full_profile.get('demographics', {})
+                elif section == "financials":
+                    return full_profile.get('financials', {})
+                elif section == "behaviors":
+                    return full_profile.get('behaviors', {})
+                elif section == "preferences":
+                    return full_profile.get('preferences', {})
+                else:
+                    return full_profile
+            except Exception as e:
+                return {"error": str(e)}
+        else:
+            return {"error": "Profile service not available"}
+    
+    elif tool_name == "search_transactions_semantic":
+        query = args.get("query", "")
+        limit = int(args.get("limit", 10))
+        
+        if RAG_AVAILABLE:
+            try:
+                rag_service = get_rag_service()
+                # Query the transactions collection
+                results = rag_service.collection.query(
+                    query_texts=[query],
+                    n_results=min(limit, 20)
+                )
+                
+                if results and results.get('documents') and results['documents'][0]:
+                    transactions = []
+                    metadatas = results.get('metadatas', [[]])[0]
+                    documents = results['documents'][0]
+                    
+                    for i, doc in enumerate(documents):
+                        meta = metadatas[i] if i < len(metadatas) else {}
+                        transactions.append({
+                            "description": meta.get('description', doc[:50]),
+                            "amount": meta.get('amount', 0),
+                            "category": meta.get('category', 'Unknown'),
+                            "date": meta.get('purchase_date', 'Unknown')
+                        })
+                    
+                    total_amount = sum(abs(float(t.get('amount', 0))) for t in transactions)
+                    
+                    return {
+                        "query": query,
+                        "transactions_found": len(transactions),
+                        "transactions": transactions[:10],  # Limit response size
+                        "total_amount": total_amount,
+                        "source": "RAG semantic search (ChromaDB)"
+                    }
+                else:
+                    return {
+                        "query": query,
+                        "transactions_found": 0,
+                        "transactions": [],
+                        "message": "No matching transactions found"
+                    }
+            except Exception as e:
+                logger.warning(f"RAG search failed: {e}")
+                return {"error": f"RAG search failed: {str(e)}"}
+        else:
+            return {"error": "RAG service not available"}
+    
+    return {"error": f"Unknown tool: {tool_name}"}
+
+
+AGENTIC_SYSTEM_PROMPT = """You are an AI financial advisor with access to the user's transaction data AND their personal profile.
+
+You have tools available to:
+1. get_transactions - Retrieve transactions with filters (by date, merchant, category)
+2. calculate_spending - Calculate totals, averages, counts
+3. identify_merchants_by_type - Find merchants by business type (coffee shops, fast food, etc.)
+4. get_spending_by_category - Get category breakdown
+5. get_current_date - Get today's date for calculating relative dates
+6. get_user_profile - GET THE USER'S PERSONAL PROFILE including income, job, goals, risk tolerance, etc.
+7. search_transactions_semantic - SEMANTIC SEARCH using RAG/AI to find relevant transactions by meaning (use for vague queries)
+
+TOOL SELECTION GUIDELINES:
+- For personal questions (income, job, goals) → use get_user_profile
+- For specific date/merchant queries → use get_transactions
+- For vague/semantic queries ("entertainment", "eating out", "subscriptions") → use search_transactions_semantic
+- For relative dates ("this month", "last week") → call get_current_date FIRST
+
+CRITICAL: For ANY question about the user personally (income, job, goals, age, experience level, etc.), you MUST call get_user_profile FIRST. Examples:
+- "Is my job high paying?" → call get_user_profile to get income_range
+- "What are my financial goals?" → call get_user_profile to get primary_goal
+- "Am I a beginner or advanced investor?" → call get_user_profile to get investment_experience
+- "What's my risk tolerance?" → call get_user_profile to get risk_tolerance
+
+IMPORTANT GUIDELINES:
+- ALWAYS call get_current_date FIRST if the user mentions relative dates like "this month", "last week", "today"
+- Use identify_merchants_by_type when the user asks about business categories (coffee shops, restaurants, streaming)
+- Chain multiple tool calls together to answer complex questions
+- Present financial data clearly with amounts formatted as currency
+
+Be conversational but precise. Use actual data from the tools, never make up numbers."""
+
+
+@app.route('/api/chat/agentic', methods=['POST'])
+def agentic_chat():
+    """
+    Agentic chat endpoint using Gemini native function calling.
+    The AI autonomously decides which tools to call based on the user's query.
+    """
+    logger.info("POST /api/chat/agentic")
+    
+    try:
+        data = request.json
+        user_query = data.get('message', '')
+        conversation_id = data.get('conversation_id', f"conv_{datetime.now().timestamp()}")
+        user_id = data.get('user_id', 'default_user')
+        
+        if not user_query:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        # Get personalized system prompt
+        personalized_prompt = AGENTIC_SYSTEM_PROMPT
+        if PROFILE_AVAILABLE:
+            try:
+                profile_svc = get_profile_service()
+                profile_context = profile_svc.get_personalization_context(user_id)
+                personalized_prompt = f"""{AGENTIC_SYSTEM_PROMPT}
+
+USER PROFILE:
+{profile_context}
+
+PERSONALIZATION GUIDELINES:
+- Address the user by name if known
+- Consider their financial goals when giving advice
+- Adjust complexity based on their investment experience
+- Be mindful of their risk tolerance
+- Use their preferred advice tone
+"""
+                # Increment chat count
+                profile_svc.increment_chat_count(user_id)
+            except Exception as e:
+                logger.warning(f"Failed to get profile context: {e}")
+        
+        # Initialize model with tools and personalized prompt
+        model = genai.GenerativeModel(
+            'gemini-2.5-flash',
+            tools=FINANCIAL_TOOLS,
+            system_instruction=personalized_prompt
+        )
+        
+        # Build conversation history for context
+        message_history = data.get('message_history', [])
+        history = []
+        for msg in message_history:
+            if msg.get('role') == 'user':
+                history.append(genai.protos.Content(
+                    role='user',
+                    parts=[genai.protos.Part(text=msg.get('content', ''))]
+                ))
+            elif msg.get('role') == 'assistant':
+                history.append(genai.protos.Content(
+                    role='model',
+                    parts=[genai.protos.Part(text=msg.get('content', ''))]
+                ))
+        
+        # Start chat with history
+        chat = model.start_chat(history=history)
+        
+        # Send user message
+        response = chat.send_message(user_query)
+        
+        # Track tool calls for debugging
+        tool_calls = []
+        max_iterations = 10  # Prevent infinite loops
+        iteration = 0
+        
+        # Agentic loop - process tool calls until model is done
+        while iteration < max_iterations:
+            iteration += 1
+            
+            # Check if response has function calls
+            if not response.candidates or not response.candidates[0].content.parts:
+                break
+            
+            has_function_call = False
+            function_responses = []
+            
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'function_call') and part.function_call:
+                    has_function_call = True
+                    fn_call = part.function_call
+                    fn_name = fn_call.name
+                    fn_args = dict(fn_call.args) if fn_call.args else {}
+                    
+                    logger.info(f"Agentic tool call: {fn_name}({fn_args})")
+                    
+                    # Execute the tool
+                    result = execute_agentic_tool(fn_name, fn_args)
+                    tool_calls.append({
+                        "tool": fn_name,
+                        "args": fn_args,
+                        "result_summary": str(result)[:200]
+                    })
+                    
+                    # Prepare function response
+                    function_responses.append(
+                        genai.protos.Part(
+                            function_response=genai.protos.FunctionResponse(
+                                name=fn_name,
+                                response={"result": json.dumps(result)}
+                            )
+                        )
+                    )
+            
+            if not has_function_call:
+                # No more function calls, model has final response
+                break
+            
+            # Send function results back to model
+            response = chat.send_message(
+                genai.protos.Content(parts=function_responses)
+            )
+        
+        # Extract final text response
+        final_response = ""
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'text') and part.text:
+                    final_response += part.text
+        
+        # Embed conversation to ChromaDB for long-term memory
+        if RAG_AVAILABLE and conversation_id:
+            try:
+                import uuid
+                rag_svc = get_rag_service()
+                timestamp = datetime.now().isoformat()
+                # Embed user message
+                embed_conversation_message(
+                    rag_svc, conversation_id, 
+                    str(uuid.uuid4()), 'user', user_query, timestamp
+                )
+                # Embed assistant response
+                embed_conversation_message(
+                    rag_svc, conversation_id,
+                    str(uuid.uuid4()), 'assistant', final_response, timestamp
+                )
+                logger.info(f"Embedded conversation turn to ChromaDB for {conversation_id}")
+            except Exception as e:
+                logger.warning(f"Failed to embed conversation: {e}")
+        
+        return jsonify({
+            'response': final_response,
+            'agentic': True,
+            'tool_calls': tool_calls,
+            'iterations': iteration
+        })
+        
+    except Exception as e:
+        logger.error(f"Agentic chat error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': str(e),
+            'response': 'I encountered an error processing your request.'
+        }), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
